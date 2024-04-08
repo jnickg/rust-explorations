@@ -1,9 +1,12 @@
-fn print_message(msg: &str) -> usize {
-    println!("{}", msg);
-    msg.len()
+#[macro_use] extern crate rocket;
+
+#[get("/")]
+fn index() -> &'static str {
+    "Hello, world!"
 }
 
-fn main() {
-    let len = print_message("Hello, world!");
-    println!("Message length: {}", len);
+#[launch]
+fn rocket() -> _ {
+    rocket::build().mount("/", routes![index])
 }
+
