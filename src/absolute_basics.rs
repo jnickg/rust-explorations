@@ -5,7 +5,7 @@ use std::ops::{Index, IndexMut};
 pub struct MyCicularBuffer<T, const N: usize> {
     /// The actual data storage
     data: [T; N],
-    
+
     /// The current size of the buffer, since elements might be popped off
     size: usize,
 
@@ -43,27 +43,23 @@ impl<T, const N: usize> MyCicularBuffer<T, N> {
         Ok(self.size)
     }
 
-
-
     pub fn data_mut(&mut self) -> &mut [T] {
         &mut self.data
     }
 }
 
-impl<T, const N: usize>Index<usize> for MyCicularBuffer<T, N> {
+impl<T, const N: usize> Index<usize> for MyCicularBuffer<T, N> {
     type Output = T;
 
     fn index(&self, i: usize) -> &Self::Output {
         let actual_index = i % self.size;
         &self.data[actual_index]
     }
-    
 }
 
-impl<T, const N: usize>IndexMut<usize> for MyCicularBuffer<T, N> {
+impl<T, const N: usize> IndexMut<usize> for MyCicularBuffer<T, N> {
     fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         let actual_index = i % self.size;
         &mut self.data[actual_index]
     }
 }
-

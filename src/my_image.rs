@@ -1,5 +1,5 @@
-use std::ops::{Index, IndexMut};
 use num::Unsigned;
+use std::ops::{Index, IndexMut};
 
 /// An Image type that stores pixel data in a contiguous array of unsigned integral elements.
 #[derive(Debug, Clone)]
@@ -55,7 +55,7 @@ impl<T: Unsigned + std::clone::Clone> MyImage<T> {
     }
 }
 
-impl<T: Unsigned + std::clone::Clone>Index<u32> for MyImage<T> {
+impl<T: Unsigned + std::clone::Clone> Index<u32> for MyImage<T> {
     type Output = [T];
 
     fn index(&self, index: u32) -> &Self::Output {
@@ -64,7 +64,7 @@ impl<T: Unsigned + std::clone::Clone>Index<u32> for MyImage<T> {
     }
 }
 
-impl<T: Unsigned + std::clone::Clone>Index<(u32, u32)> for MyImage<T> {
+impl<T: Unsigned + std::clone::Clone> Index<(u32, u32)> for MyImage<T> {
     type Output = [T];
 
     fn index(&self, (x, y): (u32, u32)) -> &Self::Output {
@@ -73,7 +73,7 @@ impl<T: Unsigned + std::clone::Clone>Index<(u32, u32)> for MyImage<T> {
     }
 }
 
-impl<T: Unsigned + std::clone::Clone>Index<(u32, u32, u32)> for MyImage<T> {
+impl<T: Unsigned + std::clone::Clone> Index<(u32, u32, u32)> for MyImage<T> {
     type Output = T;
 
     fn index(&self, (x, y, c): (u32, u32, u32)) -> &Self::Output {
@@ -83,21 +83,21 @@ impl<T: Unsigned + std::clone::Clone>Index<(u32, u32, u32)> for MyImage<T> {
     }
 }
 
-impl<T: Unsigned + std::clone::Clone>IndexMut<u32> for MyImage<T> {
+impl<T: Unsigned + std::clone::Clone> IndexMut<u32> for MyImage<T> {
     fn index_mut(&mut self, index: u32) -> &mut Self::Output {
         let index = index * self.components_per_pixel;
         &mut self.data[index as usize..(index + self.components_per_pixel) as usize]
     }
 }
 
-impl<T: Unsigned + std::clone::Clone>IndexMut<(u32, u32)> for MyImage<T> {
+impl<T: Unsigned + std::clone::Clone> IndexMut<(u32, u32)> for MyImage<T> {
     fn index_mut(&mut self, (x, y): (u32, u32)) -> &mut Self::Output {
         let index = (y * self.width + x) * self.components_per_pixel;
         &mut self.data[index as usize..(index + self.components_per_pixel) as usize]
     }
 }
 
-impl<T: Unsigned + std::clone::Clone>IndexMut<(u32, u32, u32)> for MyImage<T> {
+impl<T: Unsigned + std::clone::Clone> IndexMut<(u32, u32, u32)> for MyImage<T> {
     fn index_mut(&mut self, (x, y, c): (u32, u32, u32)) -> &mut Self::Output {
         assert!(c < self.components_per_pixel);
         let index = (y * self.width + x) * self.components_per_pixel + c;
