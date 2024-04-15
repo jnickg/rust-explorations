@@ -1,7 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-pub trait BufferElement: Clone + Copy + Default {}
-impl<T> BufferElement for T where T: Clone + Copy + Default {}
+use crate::buffer_element::BufferElement;
 
 /// A Circular Buffer whose internal storage is known at compile time
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
@@ -142,6 +141,14 @@ mod tests {
         assert_eq!(buffer.append(3), Ok(3));
         assert_eq!(buffer.append(4), Err("Buffer is full"));
         assert_eq!(buffer.data, [1, 2, 3]);
+    }
+
+    #[test]
+    fn circular_buffer_allows_large_allocation() {
+        let mut buffer = CircularBuffer::<u8, 4096>::new_empty();
+        for i in 0..4096 {
+            assert_eq!(buffer.append(i as u8), Ok(i + 1));
+        }
     }
 
     #[test]
