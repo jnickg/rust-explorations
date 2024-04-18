@@ -99,7 +99,6 @@ impl<T: PixelComponent> Index<(u32, u32)> for MyImage<T> {
     }
 }
 
-
 impl<T: PixelComponent> Index<(u32, u32, u32)> for MyImage<T> {
     type Output = T;
 

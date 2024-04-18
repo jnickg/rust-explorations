@@ -166,7 +166,11 @@ pub async fn post_something_with_id(State(app_state): AppState, Path(id): Path<u
 pub async fn post_image(State(app_state): AppState, request: Request) -> Response {
     let content_type_hdr = request.headers().get("Content-Type");
     if content_type_hdr.is_none() {
-        return (StatusCode::BAD_REQUEST, "Unable to handle request. Please pass an image body and specify content type.\n").into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            "Unable to handle request. Please pass an image body and specify content type.\n",
+        )
+            .into_response();
     }
     let mime_type = content_type_hdr.unwrap().to_str().unwrap();
     match mime_type {

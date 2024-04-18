@@ -1,7 +1,6 @@
-
 pub enum Either<TL, TR> {
     Left(TL),
-    Right(TR)
+    Right(TR),
 }
 
 // impl<TL, TR> Either<TL, TR> {
@@ -9,5 +8,5 @@ pub enum Either<TL, TR> {
 //         Left(v)
 //     }
 
-//     pub fn 
+//     pub fn
 // }

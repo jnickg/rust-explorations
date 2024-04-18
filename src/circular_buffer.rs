@@ -40,7 +40,7 @@ impl<T: BufferElement, const N: usize> CircularBuffer<T, N> {
             size: N,
             cursor: N - 1,
             capacity: N,
-            overwrites: false
+            overwrites: false,
         }
     }
 
@@ -50,32 +50,29 @@ impl<T: BufferElement, const N: usize> CircularBuffer<T, N> {
             size: N,
             cursor: N - 1,
             capacity: N,
-            overwrites: true
+            overwrites: true,
         }
     }
 
-    pub fn new_empty() -> Self
-    {
+    pub fn new_empty() -> Self {
         Self {
             data: [T::default(); N],
             size: 0,
             cursor: 0,
             capacity: N,
-            overwrites: false
+            overwrites: false,
         }
     }
 
-    pub fn new_empty_overwriting() -> Self
-    {
+    pub fn new_empty_overwriting() -> Self {
         Self {
             data: [T::default(); N],
             size: 0,
             cursor: 0,
             capacity: N,
-            overwrites: true
+            overwrites: true,
         }
     }
-
 
     pub fn append(&mut self, el: T) -> Result<usize, &'static str> {
         if self.size < self.capacity {
@@ -93,7 +90,6 @@ impl<T: BufferElement, const N: usize> CircularBuffer<T, N> {
         }
 
         Err("Buffer is full")
-    
     }
 
     pub fn pop(&mut self) -> Result<T, &'static str> {
@@ -106,7 +102,6 @@ impl<T: BufferElement, const N: usize> CircularBuffer<T, N> {
         self.cursor = (self.cursor + self.capacity - 1) % self.capacity;
         Ok(self.data[idx])
     }
-
 
     pub fn data_mut(&mut self) -> &mut [T] {
         &mut self.data
@@ -198,6 +193,4 @@ mod tests {
         assert_eq!(buffer.pop(), Err("Buffer is empty"));
         assert_eq!(buffer.size, 0);
     }
-
-
 }

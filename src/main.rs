@@ -72,8 +72,8 @@ async fn main() {
         )
         .route("/image", post(api::post_image));
 
-    let swagger_ui = SwaggerUi::new("/swagger-ui")
-        .url("/api-docs/openapi.json", api::Documentation::openapi());
+    let swagger_ui =
+        SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api::Documentation::openapi());
     let redoc_ui = Redoc::with_url("/redoc", api::Documentation::openapi());
     let rapidoc_ui = RapiDoc::new("/api-docs/openapi.json").path("/rapidoc");
 
