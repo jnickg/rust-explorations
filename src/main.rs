@@ -176,7 +176,18 @@ async fn post_image(State(app_state): AppState, request: Request) -> Response {
             let mime_type = content_type_hdr.unwrap().to_str().unwrap();
             match mime_type {
                 "image/png" => {
-                    todo!();
+                    let image_from_req = Bytes::from_request(request, &app_state).await;
+                    match image_from_req {
+                        Ok(image) => {
+                            println!("Received image with {} bytes.", image.len());
+                            (StatusCode::CREATED, "Image received.\n").into_response()
+                        }
+                        Err(_) => (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Failed to read image from request.\n",
+                        )
+                            .into_response(),
+                    }
                 }
                 _ => (
                     StatusCode::INTERNAL_SERVER_ERROR,
