@@ -3,17 +3,25 @@ name = "jnickg_rust_explorations"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 name = "jnickg_imaging"
 path = "src/lib.rs"
 
 [dependencies]
+askama = { version = "0.12.1", features = ["with-axum"] }
+askama_axum = "0.4.0"
 axum = "0.7.5"
 num = "0.4.1"
 rand = "0.8.5"
-rocket = "0.5.0"
-rstest = "0.19.0"
 rtest = "0.1.4"
+serde = { version = "1.0.198", features = ["derive", "serde_derive"] }
+serde_json = "1.0.116"
+thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["full"] }
+tower-http = { version = "0.5.2", features = ["trace"] }
+tracing = { version = "0.1.40", features = ["async-await"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+utoipa = { version = "4.2.0", features = ["axum_extras"] }
+utoipa-rapidoc = { version = "3.0.0", features = ["axum"] }
+utoipa-redoc = { version = "3.0.0", features = ["axum"] }
+utoipa-swagger-ui = { version = "6.0.0", features = ["axum"] }
