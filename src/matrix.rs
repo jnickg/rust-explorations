@@ -249,6 +249,23 @@ mod tests {
         assert_eq!(result[(1, 1)], 50);
     }
 
+    #[test]
+    fn dot_product_fn_1x2_dot_2x1() {
+        let matrix1 = Matrix::<u8, 1, 2>::new_from_flat(&[1, 2]);
+        let matrix2 = Matrix::<u8, 2, 1>::new_from_flat(&[3, 4]);
+        let result = matrix1.dot_product(matrix2);
+        assert_eq!(result[(0, 0)], 11);
+    }
+
+    #[test]
+    fn dot_product_fn_1x2_dot_1x1_fails() {
+        // TODO This should FAIL TO COMPILE, not throw a runtime error
+        let matrix1 = Matrix::<u8, 1, 2>::new_from_flat(&[1, 2]);
+        let matrix2 = Matrix::<u8, 1, 1>::new_from_flat(&[3]);
+        let result = matrix1.dot_product(matrix2);
+        assert_eq!(result[(0, 0)], 3);
+    }
+
     // #[test]
     // fn multiply() {
     //     let matrix1 = Matrix::<u8, 2, 2>::new_from_flat(&[1, 2, 3, 4]);
