@@ -131,22 +131,23 @@ impl<T: Element, const R1: usize, const C1: usize, const R2: usize, const C2: us
     }
 }
 
-// ????????
-// impl<T: Element, const R1: usize, const C1: usize, const R2: usize, const C2: usize> Mul for Matrix<T, R1, C1> {
-//     type Output = Matrix<T, R1, C2>;
+impl<T: Element, const R1: usize, const X: usize, const C2: usize>
+    Mul<Matrix<T, X, C2>> for Matrix<T, R1, X>
+{
+    type Output = Matrix<T, R1, C2>;
 
-//     fn mul(&self, m2: Matrix<T, R2, C2>) -> Self::Output {
-//         let mut result = Matrix::<T, R1, C2>::new();
-//         for i in 0..R1 {
-//             for j in 0..C2 {
-//                 for k in 0..C1 {
-//                     result[(i, j)] = result[(i, j)] + self[(i, k)] * m2[(k, j)];
-//                 }
-//             }
-//         }
-//         result
-//     }
-// }
+    fn mul(self, m2: Matrix<T, X, C2>) -> Self::Output {
+        let mut result = Matrix::<T, R1, C2>::new();
+        for i in 0..R1 {
+            for j in 0..C2 {
+                for k in 0..X {
+                    result[(i, j)] = result[(i, j)] + self[(i, k)] * m2[(k, j)];
+                }
+            }
+        }
+        result
+    }
+}
 
 
 #[cfg(test)]
