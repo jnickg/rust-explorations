@@ -38,6 +38,24 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
             els: data.clone(),
         }
     }
+
+    pub fn new_identity() -> Self {
+        let mut matrix = Self::new();
+        for i in 0..R {
+            matrix.els[i][i] = T::one();
+        }
+        matrix
+    }
+
+    pub fn transpose(&self) -> Matrix<T, C, R> {
+        let mut result = Matrix::<T, C, R>::new();
+        for i in 0..R {
+            for j in 0..C {
+                result[(j, i)] = self[(i, j)];
+            }
+        }
+        result
+    }
 }
 
 impl<T: Element, const R: usize, const C: usize> Index<(usize, usize)> for Matrix<T, R, C> {
@@ -81,7 +99,6 @@ impl<T: Element, const R: usize, const C: usize> Sub for Matrix<T, R, C> {
         result
     }
 }
-
 
 trait DotProduct<T: Element, const R2: usize, const C2: usize> {
     type Output: ?Sized;
@@ -128,7 +145,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_matrix_indexing() {
+    fn new() {
+        let matrix = Matrix::<u8, 2, 2>::new();
+        assert_eq!(matrix[(0, 0)], 0);
+        assert_eq!(matrix[(0, 1)], 0);
+        assert_eq!(matrix[(1, 0)], 0);
+        assert_eq!(matrix[(1, 1)], 0);
+    }
+
+    #[test]
+    fn new_from_flat() {
+        let matrix = Matrix::<u8, 2, 2>::new_from_flat(&[1, 2, 3, 4]);
+        assert_eq!(matrix[(0, 0)], 1);
+        assert_eq!(matrix[(0, 1)], 2);
+        assert_eq!(matrix[(1, 0)], 3);
+        assert_eq!(matrix[(1, 1)], 4);
+    }
+
+    #[test]
+    fn new_from_nested() {
+        let matrix = Matrix::<u8, 2, 2>::new_from_nested(&[[1, 2], [3, 4]]);
+        assert_eq!(matrix[(0, 0)], 1);
+        assert_eq!(matrix[(0, 1)], 2);
+        assert_eq!(matrix[(1, 0)], 3);
+        assert_eq!(matrix[(1, 1)], 4);
+    }
+
+    #[test]
+    fn new_identity() {
+        let matrix = Matrix::<u8, 2, 2>::new_identity();
+        assert_eq!(matrix[(0, 0)], 1);
+        assert_eq!(matrix[(0, 1)], 0);
+        assert_eq!(matrix[(1, 0)], 0);
+        assert_eq!(matrix[(1, 1)], 1);
+    }
+
+
+    #[test]
+    fn indexing() {
         let mut matrix = Matrix::<u8, 2, 2>::new();
         matrix[(0, 0)] = 255;
         matrix[(0, 1)] = 128;
@@ -141,17 +195,29 @@ mod tests {
     }
 
     #[test]
-    fn test_matrix_new_from_flat() {
+    fn transpose_2x2() {
         let matrix = Matrix::<u8, 2, 2>::new_from_flat(&[1, 2, 3, 4]);
-        assert_eq!(matrix[(0, 0)], 1);
-        assert_eq!(matrix[(0, 1)], 2);
-        assert_eq!(matrix[(1, 0)], 3);
-        assert_eq!(matrix[(1, 1)], 4);
-    
+        let result = matrix.transpose();
+        assert_eq!(result[(0, 0)], 1);
+        assert_eq!(result[(0, 1)], 3);
+        assert_eq!(result[(1, 0)], 2);
+        assert_eq!(result[(1, 1)], 4);
     }
 
     #[test]
-    fn test_matrix_add() {
+    fn transpose_3x2() {
+        let matrix = Matrix::<u8, 3, 2>::new_from_flat(&[1, 2, 3, 4, 5, 6]);
+        let result = matrix.transpose();
+        assert_eq!(result[(0, 0)], 1);
+        assert_eq!(result[(0, 1)], 3);
+        assert_eq!(result[(0, 2)], 5);
+        assert_eq!(result[(1, 0)], 2);
+        assert_eq!(result[(1, 1)], 4);
+        assert_eq!(result[(1, 2)], 6);
+    }
+
+    #[test]
+    fn add() {
         let matrix1 = Matrix::<u8, 2, 2>::new_from_flat(&[1, 2, 3, 4]);
         let matrix2 = Matrix::<u8, 2, 2>::new_from_flat(&[5, 6, 7, 8]);
         let result = matrix1 + matrix2;
@@ -162,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn test_matrix_sub() {
+    fn sub() {
         let matrix1 = Matrix::<i8, 2, 2>::new_from_flat(&[1, 2, 3, 4]);
         let matrix2 = Matrix::<i8, 2, 2>::new_from_flat(&[5, 6, 7, 8]);
         let result = matrix2 - matrix1;
@@ -170,11 +236,10 @@ mod tests {
         assert_eq!(result[(0, 1)], 4);
         assert_eq!(result[(1, 0)], 4);
         assert_eq!(result[(1, 1)], 4);
-    
     }
 
     #[test]
-    fn test_matrix_dot_product_fn() {
+    fn dot_product_fn() {
         let matrix1 = Matrix::<u8, 2, 2>::new_from_flat(&[1, 2, 3, 4]);
         let matrix2 = Matrix::<u8, 2, 2>::new_from_flat(&[5, 6, 7, 8]);
         let result = matrix1.dot_product(matrix2);
@@ -185,7 +250,7 @@ mod tests {
     }
 
     // #[test]
-    // fn test_matrix_multiply() {
+    // fn multiply() {
     //     let matrix1 = Matrix::<u8, 2, 2>::new_from_flat(&[1, 2, 3, 4]);
     //     let matrix2 = Matrix::<u8, 2, 2>::new_from_flat(&[5, 6, 7, 8]);
     //     let result = matrix1 * matrix2;
