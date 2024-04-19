@@ -56,6 +56,15 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
         }
         result
     }
+
+    pub const fn rows(&self) -> usize {
+        R
+    }
+
+    pub const fn cols(&self) -> usize {
+        C
+    }
+
 }
 
 impl<T: Element, const R: usize, const C: usize> Index<(usize, usize)> for Matrix<T, R, C> {
