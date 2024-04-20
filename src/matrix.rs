@@ -1,8 +1,13 @@
 use num::{Num, One, Zero};
 use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Sub};
+use crate::my_traits::{Assert, IsTrue, TheTypes, NotSame};
 
-pub trait Element: Num + Clone + Default + Copy + Zero + One + AddAssign {}
-impl<T> Element for T where T: Num + Clone + Default + Copy + Zero + One + AddAssign {}
+pub trait Element: Num + Clone + Default + Copy + Zero + One + AddAssign {
+    type ElementType;
+}
+impl<T> Element for T where T: Num + Clone + Default + Copy + Zero + One + AddAssign {
+    type ElementType = T;
+}
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
 pub struct Matrix<T: Element, const R: usize, const C: usize> {
@@ -181,19 +186,43 @@ impl<T: Element, const R: usize, const C: usize> Mul<T> for Matrix<T, R, C> {
     }
 }
 
-// impl<T: Element, U: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for Matrix<U, R, C> 
-// where
-// {
-//     fn from(matrix: Matrix<T, R, C>) -> Self {
-//         let mut result = Matrix::<U, R, C>::empty();
-//         for i in 0..R {
-//             for j in 0..C {
-//                 result[(i, j)] = matrix[(i, j)].into();
-//             }
-//         }
-//         result
-//     }
-// }
+impl<T: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for [[T; C]; R] {
+    fn from(matrix: Matrix<T, R, C>) -> Self {
+        matrix.els
+    }
+}
+
+impl<T: Element, const R: usize, const C: usize, const N: usize> From<Matrix<T, R, C>> for [T; N]
+    where
+        Assert::<{N == R * C}>: IsTrue
+{
+    fn from(matrix: Matrix<T, R, C>) -> Self
+    {
+        assert_eq!(N, R * C, "Data size does not match matrix size");
+        let mut data = [T::zero(); N];
+        for i in 0..R {
+            for j in 0..C {
+                data[i * C + j] = matrix[(i, j)];
+            }
+        }
+        data
+    }
+}
+
+impl<T: Element, U: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for Matrix<U, R, C>
+    where
+    TheTypes::<T, U> : NotSame
+{
+    fn from(matrix: Matrix<T, R, C>) -> Self {
+        let mut result = Matrix::<U, R, C>::empty();
+        for i in 0..R {
+            for j in 0..C {
+                result[(i, j)] = matrix[(i, j)].into();
+            }
+        }
+        result
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -354,13 +383,13 @@ mod tests {
         assert_eq!(result[(1, 1)], 8);
     }
 
-    // #[test]
-    // fn from_other_element_type() {
-    //     let matrix = Matrix::<u8, 2, 2>::from_flat(&[1, 2, 3, 4]);
-    //     let result: Matrix<u16, 2, 2> = matrix.into();
-    //     assert_eq!(result[(0, 0)], 1);
-    //     assert_eq!(result[(0, 1)], 2);
-    //     assert_eq!(result[(1, 0)], 3);
-    //     assert_eq!(result[(1, 1)], 4);
-    // }
+    #[test]
+    fn from_other_element_type() {
+        let matrix = Matrix::<u8, 2, 2>::from_flat(&[1, 2, 3, 4]);
+        let result: Matrix<u16, 2, 2> = matrix.into();
+        assert_eq!(result[(0, 0)], 1);
+        assert_eq!(result[(0, 1)], 2);
+        assert_eq!(result[(1, 0)], 3);
+        assert_eq!(result[(1, 1)], 4);
+    }
 }
