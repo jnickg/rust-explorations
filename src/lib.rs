@@ -4,6 +4,7 @@ pub mod dims;
 pub mod dyn_matrix;
 pub mod element;
 pub mod errors;
+pub mod matrix_type;
 pub mod from_mat;
 pub mod matrix;
 pub mod my_image;

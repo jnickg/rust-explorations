@@ -4,6 +4,7 @@ use utoipa::ToSchema;
 
 use crate::dims::{Dims, Rows, Cols, HasDims};
 use crate::element::Element;
+use crate::matrix_type::{Indexible, IsMatrix};
 // use crate::my_traits::{AreNotSame, IsTrue, Multiplied, TheTypes, Values, AreEqual};
 
 
@@ -120,19 +121,40 @@ impl<T: Element> HasDims for DynMatrix<T> {
     }
 }
 
-impl<T: Element> Index<(usize, usize)> for DynMatrix<T> {
-    type Output = T;
+impl<T: Element> Indexible<T> for DynMatrix<T> {
+    fn at(&self, d: Dims) -> T {
+        let Dims(Rows(r), Cols(c)) = d;
+        self.els[r][c]
+    }
 
-    fn index(&self, (x, y): (usize, usize)) -> &Self::Output {
-        &self.els[x][y]
+    fn at_mut(&mut self, d: Dims) -> &mut T {
+        let Dims(Rows(r), Cols(c)) = d;
+        &mut self.els[r][c]
     }
 }
 
-impl<T: Element> IndexMut<(usize, usize)> for DynMatrix<T> {
-    fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut Self::Output {
-        &mut self.els[x][y]
+impl<T: Element> IsMatrix<T> for DynMatrix<T> {
+    fn zeros<D>(dims: D) -> Self
+        where D: Into<Dims>
+    {
+        Self::zeros(dims)
+    }
+
+    fn zeros_like(m: &Self) -> Self {
+        Self::zeros_like(m)
+    }
+
+    fn ones<D>(dims: D) -> Self
+        where D: Into<Dims>
+    {
+        Self::ones(dims)
+    }
+
+    fn ones_like(m: &Self) -> Self {
+        Self::ones_like(m)
     }
 }
+
 
 impl<T: Element> Add for DynMatrix<T> {
     type Output = Self;
@@ -203,7 +225,7 @@ impl<T: Element> From<DynMatrix<T>> for Vec<Vec<T>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::from_mat::FromDynMat;
+    use crate::{from_mat::{FromDynMat, FromMat}, matrix::Matrix};
 
     use super::*;
 
@@ -335,9 +357,19 @@ mod tests {
     }
 
     #[test]
-    fn from_other_element_type() {
+    fn from_other_element_type_dyn_mat() {
         let matrix = DynMatrix::<u8>::from_flat(&[1, 2, 3, 4], (2, 2));
         let result = DynMatrix::<u16>::from_dyn_mat(matrix);
+        assert_eq!(result[(0, 0)], 1);
+        assert_eq!(result[(0, 1)], 2);
+        assert_eq!(result[(1, 0)], 3);
+        assert_eq!(result[(1, 1)], 4);
+    }
+
+    #[test]
+    fn from_other_element_type_mat() {
+        let matrix = Matrix::<u8, 2, 2>::from_flat(&[1, 2, 3, 4]);
+        let result = DynMatrix::<u16>::from_mat(matrix);
         assert_eq!(result[(0, 0)], 1);
         assert_eq!(result[(0, 1)], 2);
         assert_eq!(result[(1, 0)], 3);
