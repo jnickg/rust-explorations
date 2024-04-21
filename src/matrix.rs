@@ -1,23 +1,20 @@
-use num::{Num, One, Zero};
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, Sub};
-use crate::my_traits::{Assert, IsTrue, TheTypes, NotSame};
-
-pub trait Element: Num + Clone + Default + Copy + Zero + One + AddAssign {
-    type ElementType;
-}
-impl<T> Element for T where T: Num + Clone + Default + Copy + Zero + One + AddAssign {
-    type ElementType = T;
-}
+use std::ops::{Add, Index, IndexMut, Mul, Sub};
+// use serde::{Serialize, Deserialize};
+// use utoipa::ToSchema;
+// use crate::my_traits::{AreNotSame, IsTrue, Multiplied, TheTypes, Values, AreEqual};
+use crate::{dims::{Dims, HasDims}, element::Element};
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
+// #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Matrix<T: Element, const R: usize, const C: usize> {
     /// The elements of this matrix
+    // #[schema(example = json!([[1,0],[0,1]]))]
     els: [[T; C]; R],
 }
 
 impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
     /// Create a new matrix with all elements set to zero.
-    pub fn empty() -> Self {
+    pub fn zeros() -> Self {
         Self {
             els: [[T::zero(); C]; R],
         }
@@ -37,7 +34,7 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
 
     /// Create a new matrix of the given size from a flat array
     pub fn from_flat(data: &[T]) -> Self {
-        let mut matrix = Self::empty();
+        let mut matrix = Self::zeros();
         let data_sz = data.len();
         assert_eq!(data_sz, R * C, "Data size does not match matrix size");
         
@@ -57,7 +54,7 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
     }
 
     pub fn identity() -> Self {
-        let mut matrix = Self::empty();
+        let mut matrix = Self::zeros();
         for i in 0..R {
             matrix.els[i][i] = T::one();
         }
@@ -65,7 +62,7 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
     }
 
     pub fn identity_like(_: &Self) -> Self {
-        let mut matrix = Self::empty();
+        let mut matrix = Self::zeros();
         for i in 0..R {
             matrix.els[i][i] = T::one();
         }
@@ -73,7 +70,7 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
     }
 
     pub fn transpose(&self) -> Matrix<T, C, R> {
-        let mut result = Matrix::<T, C, R>::empty();
+        let mut result = Matrix::<T, C, R>::zeros();
         for i in 0..R {
             for j in 0..C {
                 result[(j, i)] = self[(i, j)];
@@ -81,15 +78,20 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
         }
         result
     }
+}
 
-    pub const fn rows(&self) -> usize {
+impl<T: Element, const R: usize, const C: usize> HasDims for Matrix<T, R, C> {
+    fn rows(&self) -> usize {
         R
     }
 
-    pub const fn cols(&self) -> usize {
+    fn cols(&self) -> usize {
         C
     }
 
+    fn dims(&self) -> Dims {
+        (self.rows(), self.cols()).into()
+    }
 }
 
 impl<T: Element, const R: usize, const C: usize> Index<(usize, usize)> for Matrix<T, R, C> {
@@ -110,7 +112,7 @@ impl<T: Element, const R: usize, const C: usize> Add for Matrix<T, R, C> {
     type Output = Self;
 
     fn add(self, other: Self) -> Self::Output {
-        let mut result = Matrix::<T, R, C>::empty();
+        let mut result = Matrix::<T, R, C>::zeros();
         for i in 0..R {
             for j in 0..C {
                 result[(i, j)] = self[(i, j)] + other[(i, j)];
@@ -124,7 +126,7 @@ impl<T: Element, const R: usize, const C: usize> Sub for Matrix<T, R, C> {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self::Output {
-        let mut result = Matrix::<T, R, C>::empty();
+        let mut result = Matrix::<T, R, C>::zeros();
         for i in 0..R {
             for j in 0..C {
                 result[(i, j)] = self[(i, j)] - other[(i, j)];
@@ -140,14 +142,14 @@ trait DotProduct<T: Element, const R2: usize, const C2: usize> {
     fn dot_product(&self, m2: Matrix<T, R2, C2>) -> Self::Output;
 }
 
-impl<T: Element, const R1: usize, const C1: usize, const R2: usize, const C2: usize> DotProduct<T, R2, C2> for Matrix<T, R1, C1> {
+impl<T: Element, const R1: usize, const I: usize, const C2: usize> DotProduct<T, I, C2> for Matrix<T, R1, I> {
     type Output = Matrix<T, R1, C2>;
 
-    fn dot_product(&self, m2: Matrix<T, R2, C2>) -> Self::Output {
-        let mut result = Matrix::<T, R1, C2>::empty();
+    fn dot_product(&self, m2: Matrix<T, I, C2>) -> Self::Output {
+        let mut result = Matrix::<T, R1, C2>::zeros();
         for i in 0..R1 {
             for j in 0..C2 {
-                for k in 0..C1 {
+                for k in 0..I {
                     result[(i, j)] += self[(i, k)] * m2[(k, j)];
                 }
             }
@@ -156,14 +158,14 @@ impl<T: Element, const R1: usize, const C1: usize, const R2: usize, const C2: us
     }
 }
 
-impl<T: Element, const R1: usize, const C1: usize, const R2: usize, const C2: usize> Mul<Matrix<T, R2, C2>> for Matrix<T, R1, C1> {
+impl<T: Element, const R1: usize, const I: usize, const C2: usize> Mul<Matrix<T, I, C2>> for Matrix<T, R1, I> {
     type Output = Matrix<T, R1, C2>;
 
-    fn mul(self, m2: Matrix<T, R2, C2>) -> Self::Output {
-        let mut result = Matrix::<T, R1, C2>::empty();
+    fn mul(self, m2: Matrix<T, I, C2>) -> Self::Output {
+        let mut result = Matrix::<T, R1, C2>::zeros();
         for i in 0..R1 {
             for j in 0..C2 {
-                for k in 0..C1 {
+                for k in 0..I {
                     result[(i, j)] += self[(i, k)] * m2[(k, j)];
                 }
             }
@@ -176,7 +178,7 @@ impl<T: Element, const R: usize, const C: usize> Mul<T> for Matrix<T, R, C> {
     type Output = Matrix<T, R, C>;
 
     fn mul(self, scalar: T) -> Self::Output {
-        let mut result = Matrix::<T, R, C>::empty();
+        let mut result = Matrix::<T, R, C>::zeros();
         for i in 0..R {
             for j in 0..C {
                 result[(i, j)] = self[(i, j)] * scalar;
@@ -192,45 +194,46 @@ impl<T: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for [[T; 
     }
 }
 
-impl<T: Element, const R: usize, const C: usize, const N: usize> From<Matrix<T, R, C>> for [T; N]
-    where
-        Assert::<{N == R * C}>: IsTrue
-{
-    fn from(matrix: Matrix<T, R, C>) -> Self
-    {
-        assert_eq!(N, R * C, "Data size does not match matrix size");
-        let mut data = [T::zero(); N];
-        for i in 0..R {
-            for j in 0..C {
-                data[i * C + j] = matrix[(i, j)];
-            }
-        }
-        data
-    }
-}
+// impl<T: Element, const R: usize, const C: usize, const N: usize> From<Matrix<T, R, C>> for [T; N]
+//     where
+//         Eval<{IsMultiple::<R, C, N>::IS_MULTIPLE}> : IsTrue
+// {
+//     fn from(matrix: Matrix<T, R, C>) -> Self
+//     {
+//         assert_eq!(N, R * C, "Data size does not match matrix size");
+//         let mut data = [T::zero(); N];
+//         for i in 0..R {
+//             for j in 0..C {
+//                 data[i * C + j] = matrix[(i, j)];
+//             }
+//         }
+//         data
+//     }
+// }
 
-impl<T: Element, U: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for Matrix<U, R, C>
-    where
-    TheTypes::<T, U> : NotSame
-{
-    fn from(matrix: Matrix<T, R, C>) -> Self {
-        let mut result = Matrix::<U, R, C>::empty();
-        for i in 0..R {
-            for j in 0..C {
-                result[(i, j)] = matrix[(i, j)].into();
-            }
-        }
-        result
-    }
-}
+// impl<T: Element, U: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for Matrix<U, R, C>
+//     where
+//         TheTypes::<T, U> : AreNotSame
+// {
+//     fn from(matrix: Matrix<T, R, C>) -> Self {
+//         let mut result = Matrix::<U, R, C>::empty();
+//         for i in 0..R {
+//             for j in 0..C {
+//                 result[(i, j)] = matrix[(i, j)].into();
+//             }
+//         }
+//         result
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
+    use crate::from_mat::FromMat;
     use super::*;
 
     #[test]
-    fn empty() {
-        let matrix = Matrix::<u8, 2, 2>::empty();
+    fn zeros() {
+        let matrix = Matrix::<u8, 2, 2>::zeros();
         assert_eq!(matrix[(0, 0)], 0);
         assert_eq!(matrix[(0, 1)], 0);
         assert_eq!(matrix[(1, 0)], 0);
@@ -267,7 +270,7 @@ mod tests {
 
     #[test]
     fn indexing() {
-        let mut matrix = Matrix::<u8, 2, 2>::empty();
+        let mut matrix = Matrix::<u8, 2, 2>::zeros();
         matrix[(0, 0)] = 255;
         matrix[(0, 1)] = 128;
         matrix[(1, 0)] = 0;
@@ -342,16 +345,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn dot_product_fn_1x2_dot_1x1_fails() {
-        // TODO This should FAIL TO COMPILE, not throw a runtime error
-        let matrix1 = Matrix::<u8, 1, 2>::from_flat(&[1, 2]);
-        let matrix2 = Matrix::<u8, 1, 1>::from_flat(&[3]);
-        let result = matrix1.dot_product(matrix2);
-        assert_eq!(result[(0, 0)], 3);
-    }
-
-    #[test]
     fn mul_matrix() {
         let matrix1 = Matrix::<u8, 2, 2>::from_flat(&[1, 2, 3, 4]);
         let matrix2 = Matrix::<u8, 2, 2>::from_flat(&[5, 6, 7, 8]);
@@ -386,7 +379,7 @@ mod tests {
     #[test]
     fn from_other_element_type() {
         let matrix = Matrix::<u8, 2, 2>::from_flat(&[1, 2, 3, 4]);
-        let result: Matrix<u16, 2, 2> = matrix.into();
+        let result = Matrix::<u16, 2, 2>::from_mat(matrix);
         assert_eq!(result[(0, 0)], 1);
         assert_eq!(result[(0, 1)], 2);
         assert_eq!(result[(1, 0)], 3);

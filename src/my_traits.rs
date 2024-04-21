@@ -1,17 +1,19 @@
-pub enum Assert<const COND: bool> {}
+use std::marker::PhantomData;
+
+pub enum Eval<const COND: bool> {}
 
 pub trait IsTrue {}
 pub trait IsFalse {}
 
-impl IsTrue for Assert<true> {}
-impl IsFalse for Assert<false> {}
+impl IsTrue for Eval<true> {}
+impl IsFalse for Eval<false> {}
 
-pub enum TheTypes<T, U> {
-    T1(T),
-    T2(U)
+pub struct TheTypes<T, U> {
+    __p1: PhantomData<T>,
+    __p2: PhantomData<U>
 }
 pub trait AreSame {}
-pub trait NotSame {}
+pub trait AreNotSame {}
 
 impl<T> AreSame for TheTypes<T, T> {}
-impl<T, U> NotSame for TheTypes<T, U> {}
+impl<T, U> AreNotSame for TheTypes<T, U> {}
