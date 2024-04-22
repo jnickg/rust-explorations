@@ -13,7 +13,7 @@ use crate::*;
         post_image
     ),
     tags(
-        (name = "knock-knock", description = "Knock-Knock Joke API")
+        (name = "jnickg_imaging", description = "Toy Image Processing API")
     )
 )]
 pub struct Documentation;

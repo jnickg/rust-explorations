@@ -47,10 +47,6 @@ async fn handler_404() -> Response {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "knock_knock=debug,info".into()),
-        )
         .with(tracing_subscriber::fmt::layer())
         .init();
     // https://carlosmv.hashnode.dev/adding-logging-and-tracing-to-an-axum-app-rust
