@@ -1,6 +1,4 @@
 use std::ops::{Add, Index, IndexMut, Mul, Sub};
-use serde::{Serialize, Deserialize};
-use utoipa::ToSchema;
 
 use crate::dims::{Dims, Rows, Cols, HasDims};
 use crate::element::Element;
@@ -8,10 +6,9 @@ use crate::element::Element;
 
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone)]
 pub struct DynMatrix<T: Element> {
     /// The elements of this matrix
-    #[schema(example = json!([[1,0],[0,1]]))]
     els: Vec<Vec<T>>,
 }
 
@@ -120,11 +117,88 @@ impl<T: Element> HasDims for DynMatrix<T> {
     }
 }
 
+pub struct DynMatrixIterator<'a, T: Element> {
+    matrix: &'a DynMatrix<T>,
+    row: usize,
+}
+
+impl<'a, T: Element> Iterator for DynMatrixIterator<'a, T> {
+    type Item = Vec<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row < self.matrix.rows() {
+            let result = &self.matrix.els[self.row];
+            self.row += 1;
+            Some(result.to_vec())
+        } else {
+            None
+        }
+    
+    }
+}
+
+pub struct DynMatrixIntoIterator<T: Element> {
+    matrix: DynMatrix<T>,
+    row: usize,
+}
+
+impl<T: Element> Iterator for DynMatrixIntoIterator<T> {
+    type Item = Vec<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row < self.matrix.rows() {
+            let result = &self.matrix.els[self.row];
+            self.row += 1;
+            Some(result.to_vec())
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Element> IntoIterator for DynMatrix<T> {
+    type Item = Vec<T>;
+    type IntoIter = DynMatrixIntoIterator<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        DynMatrixIntoIterator {
+            matrix: self,
+            row: 0,
+        }
+    }
+}
+
+impl<'a, T: Element> IntoIterator for &'a DynMatrix<T> {
+    type Item = Vec<T>;
+    type IntoIter = DynMatrixIterator<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        DynMatrixIterator {
+            matrix: self,
+            row: 0,
+        }
+    }
+}
+
 impl<T: Element> Index<(usize, usize)> for DynMatrix<T> {
     type Output = T;
 
     fn index(&self, (x, y): (usize, usize)) -> &Self::Output {
         &self.els[x][y]
+    }
+}
+
+impl<T: Element> Index<usize> for DynMatrix<T> {
+    type Output = [T];
+
+    fn index(&self, x: usize) -> &Self::Output {
+        &self.els[x]
+    }
+}
+
+impl<T: Element> IndexMut<usize> for DynMatrix<T> {
+    fn index_mut(&mut self, x: usize) -> &mut Self::Output {
+        &mut self.els[x]
     }
 }
 

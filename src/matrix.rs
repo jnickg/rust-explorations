@@ -1,14 +1,12 @@
 use std::ops::{Add, Index, IndexMut, Mul, Sub};
-// use serde::{Serialize, Deserialize};
-// use utoipa::ToSchema;
-// use crate::my_traits::{AreNotSame, IsTrue, Multiplied, TheTypes, Values, AreEqual};
+use utoipa::ToSchema;
 use crate::{dims::{Dims, HasDims}, element::Element};
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
-// #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, ToSchema)]
 pub struct Matrix<T: Element, const R: usize, const C: usize> {
     /// The elements of this matrix
-    // #[schema(example = json!([[1,0],[0,1]]))]
+    #[schema(example = json!([[1,0],[0,1]]))]
     els: [[T; C]; R],
 }
 
@@ -91,6 +89,83 @@ impl<T: Element, const R: usize, const C: usize> HasDims for Matrix<T, R, C> {
 
     fn dims(&self) -> Dims {
         (self.rows(), self.cols()).into()
+    }
+}
+
+pub struct MatrixIterator<'a, T: Element, const R: usize, const C: usize> {
+    matrix: &'a Matrix<T, R, C>,
+    row: usize,
+}
+
+impl<'a, T: Element, const R: usize, const C: usize> Iterator for MatrixIterator<'a, T, R, C> {
+    type Item = [T; C];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row < R {
+            let result = self.matrix.els[self.row];
+            self.row += 1;
+            Some(result)
+        } else {
+            None
+        }
+    
+    }
+}
+
+pub struct MatrixIntoIterator<T: Element, const R: usize, const C: usize> {
+    matrix: Matrix<T, R, C>,
+    row: usize,
+}
+
+impl<T: Element, const R: usize, const C: usize> Iterator for MatrixIntoIterator<T, R, C> {
+    type Item = [T; C];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row < R {
+            let result = self.matrix.els[self.row];
+            self.row += 1;
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Element, const R: usize, const C: usize> IntoIterator for Matrix<T, R, C> {
+    type Item = [T; C];
+    type IntoIter = MatrixIntoIterator<T, R, C>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MatrixIntoIterator {
+            matrix: self,
+            row: 0,
+        }
+    }
+}
+
+impl<'a, T: Element, const R: usize, const C: usize> IntoIterator for &'a Matrix<T, R, C> {
+    type Item = [T; C];
+    type IntoIter = MatrixIterator<'a, T, R, C>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MatrixIterator {
+            matrix: self,
+            row: 0,
+        }
+    }
+}
+
+impl<T: Element, const R: usize, const C: usize> Index<usize> for Matrix<T, R, C> {
+    type Output = [T; C];
+
+    fn index(&self, r: usize) -> &Self::Output {
+        &self.els[r]
+    }
+}
+
+impl<T: Element, const R: usize, const C: usize> IndexMut<usize> for Matrix<T, R, C> {
+    fn index_mut(&mut self, r: usize) -> &mut Self::Output {
+        &mut self.els[r]
     }
 }
 
@@ -193,38 +268,6 @@ impl<T: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for [[T; 
         matrix.els
     }
 }
-
-// impl<T: Element, const R: usize, const C: usize, const N: usize> From<Matrix<T, R, C>> for [T; N]
-//     where
-//         Eval<{IsMultiple::<R, C, N>::IS_MULTIPLE}> : IsTrue
-// {
-//     fn from(matrix: Matrix<T, R, C>) -> Self
-//     {
-//         assert_eq!(N, R * C, "Data size does not match matrix size");
-//         let mut data = [T::zero(); N];
-//         for i in 0..R {
-//             for j in 0..C {
-//                 data[i * C + j] = matrix[(i, j)];
-//             }
-//         }
-//         data
-//     }
-// }
-
-// impl<T: Element, U: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for Matrix<U, R, C>
-//     where
-//         TheTypes::<T, U> : AreNotSame
-// {
-//     fn from(matrix: Matrix<T, R, C>) -> Self {
-//         let mut result = Matrix::<U, R, C>::empty();
-//         for i in 0..R {
-//             for j in 0..C {
-//                 result[(i, j)] = matrix[(i, j)].into();
-//             }
-//         }
-//         result
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -385,4 +428,6 @@ mod tests {
         assert_eq!(result[(1, 0)], 3);
         assert_eq!(result[(1, 1)], 4);
     }
+
+
 }
