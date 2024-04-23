@@ -3,7 +3,7 @@ use utoipa::ToSchema;
 use crate::{dims::{Dims, HasDims}, element::Element};
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
-#[derive(Debug, Clone, ToSchema)]
+#[derive(Debug, Clone, ToSchema, PartialEq, Eq)]
 pub struct Matrix<T: Element, const R: usize, const C: usize> {
     /// The elements of this matrix
     #[schema(example = json!([[1,0],[0,1]]))]
@@ -49,6 +49,18 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
         Self {
             els: *data,
         }
+    }
+
+    pub fn from_vec(data: &[Vec<T>]) -> Self {
+        let mut matrix = Self::zeros();
+        let data_sz = data.len() * data[0].len(); // Outer array can never be empty
+        assert_eq!(data_sz, R * C, "Data size does not match matrix size");
+        for i in 0..R {
+            for j in 0..C {
+                matrix.els[i][j] = data[i][j];
+            }
+        }
+        matrix
     }
 
     pub fn identity() -> Self {

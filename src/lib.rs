@@ -5,7 +5,7 @@ pub mod dyn_matrix;
 pub mod element;
 pub mod errors;
 pub mod from_mat;
-pub mod matrices_serde;
+pub mod serde;
 pub mod matrix;
 pub mod my_image;
 pub mod my_traits;

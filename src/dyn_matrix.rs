@@ -6,7 +6,7 @@ use crate::element::Element;
 
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DynMatrix<T: Element> {
     /// The elements of this matrix
     els: Vec<Vec<T>>,
@@ -69,7 +69,16 @@ impl<T: Element> DynMatrix<T> {
             }
         }
         matrix
-    
+    }
+
+    pub fn from_vec(data: &[Vec<T>]) -> Self {
+        let mut matrix = Self::zeros((data.len(), data[0].len()));
+        for (i, row) in data.iter().enumerate() {
+            for (j, el) in row.iter().enumerate() {
+                matrix.els[i][j] = *el;
+            }
+        }
+        matrix
     }
 
     pub fn identity<D>(dims: D) -> Self
