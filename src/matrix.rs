@@ -6,7 +6,6 @@ use crate::{dims::{Dims, HasDims}, element::Element};
 #[derive(Debug, Clone, ToSchema, PartialEq, Eq)]
 pub struct Matrix<T: Element, const R: usize, const C: usize> {
     /// The elements of this matrix
-    #[schema(example = json!([[1,0],[0,1]]))]
     els: [[T; C]; R],
 }
 
@@ -55,9 +54,9 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
         let mut matrix = Self::zeros();
         let data_sz = data.len() * data[0].len(); // Outer array can never be empty
         assert_eq!(data_sz, R * C, "Data size does not match matrix size");
-        for i in 0..R {
-            for j in 0..C {
-                matrix.els[i][j] = data[i][j];
+        for (i, row) in data.iter().enumerate().take(R) {
+            for (j, el) in row.iter().enumerate().take(C) {
+                matrix.els[i][j] = *el;
             }
         }
         matrix
