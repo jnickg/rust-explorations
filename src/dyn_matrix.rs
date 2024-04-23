@@ -50,6 +50,8 @@ impl<T: Element> DynMatrix<T> {
         where D: Into<Dims>
     {
         let Dims(Rows(r), Cols(c)) = dims.into();
+        let num_els = r * c;
+        assert_eq!(data.len(), num_els);
         let mut matrix = Self::zeros((r, c));
         for i in 0..r {
             for j in 0..c {
