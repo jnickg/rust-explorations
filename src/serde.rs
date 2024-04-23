@@ -63,13 +63,16 @@ struct MatrixVisitor<T: Element, const R: usize, const C: usize> {
 }
 
 impl<'de, T: Element, const R: usize, const C: usize> Visitor<'de> for MatrixVisitor<T, R, C>
-    where
-        T: Deserialize<'de>
+where
+    T: Deserialize<'de>,
 {
     type Value = Matrix<T, R, C>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str(&format!("a 2-dimensional matrix of numeric values with dimensions {}x{}", R, C))
+        formatter.write_str(&format!(
+            "a 2-dimensional matrix of numeric values with dimensions {}x{}",
+            R, C
+        ))
     }
 
     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -79,7 +82,9 @@ impl<'de, T: Element, const R: usize, const C: usize> Visitor<'de> for MatrixVis
         let mut rows = Vec::with_capacity(R);
         while let Some(row) = seq.next_element::<Vec<T>>()? {
             if row.len() != C {
-                return Err(serde::de::Error::custom("invalid number of columns in matrix"));
+                return Err(serde::de::Error::custom(
+                    "invalid number of columns in matrix",
+                ));
             }
 
             rows.push(row);
@@ -92,7 +97,8 @@ impl<'de, T: Element, const R: usize, const C: usize> Visitor<'de> for MatrixVis
 }
 
 impl<'de, T: Element, const R: usize, const C: usize> Deserialize<'de> for Matrix<T, R, C>
-    where T: Deserialize<'de>
+where
+    T: Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Matrix<T, R, C>, D::Error>
     where
@@ -111,8 +117,8 @@ struct DynMatrixVisitor<T: Element> {
 }
 
 impl<'de, T: Element> Visitor<'de> for DynMatrixVisitor<T>
-    where
-        T: Deserialize<'de>
+where
+    T: Deserialize<'de>,
 {
     type Value = DynMatrix<T>;
 
@@ -142,7 +148,8 @@ impl<'de, T: Element> Visitor<'de> for DynMatrixVisitor<T>
 }
 
 impl<'de, T: Element> Deserialize<'de> for DynMatrix<T>
-    where T: Deserialize<'de>
+where
+    T: Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<DynMatrix<T>, D::Error>
     where
@@ -154,8 +161,6 @@ impl<'de, T: Element> Deserialize<'de> for DynMatrix<T>
         })
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

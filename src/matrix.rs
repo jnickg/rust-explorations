@@ -1,6 +1,9 @@
+use crate::{
+    dims::{Dims, HasDims},
+    element::Element,
+};
 use std::ops::{Add, Index, IndexMut, Mul, Sub};
 use utoipa::ToSchema;
-use crate::{dims::{Dims, HasDims}, element::Element};
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
 #[derive(Debug, Clone, ToSchema, PartialEq, Eq)]
@@ -34,7 +37,7 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
         let mut matrix = Self::zeros();
         let data_sz = data.len();
         assert_eq!(data_sz, R * C, "Data size does not match matrix size");
-        
+
         for i in 0..R {
             for j in 0..C {
                 matrix.els[i][j] = data[i * C + j];
@@ -45,9 +48,7 @@ impl<T: Element, const R: usize, const C: usize> Matrix<T, R, C> {
 
     /// Create a new matrix of the given size from a nested array
     pub fn from_nested(data: &[[T; C]; R]) -> Self {
-        Self {
-            els: *data,
-        }
+        Self { els: *data }
     }
 
     pub fn from_vec(data: &[Vec<T>]) -> Self {
@@ -119,7 +120,6 @@ impl<'a, T: Element, const R: usize, const C: usize> Iterator for MatrixIterator
         } else {
             None
         }
-    
     }
 }
 
@@ -228,7 +228,9 @@ trait DotProduct<T: Element, const R2: usize, const C2: usize> {
     fn dot_product(&self, m2: Matrix<T, R2, C2>) -> Self::Output;
 }
 
-impl<T: Element, const R1: usize, const I: usize, const C2: usize> DotProduct<T, I, C2> for Matrix<T, R1, I> {
+impl<T: Element, const R1: usize, const I: usize, const C2: usize> DotProduct<T, I, C2>
+    for Matrix<T, R1, I>
+{
     type Output = Matrix<T, R1, C2>;
 
     fn dot_product(&self, m2: Matrix<T, I, C2>) -> Self::Output {
@@ -244,7 +246,9 @@ impl<T: Element, const R1: usize, const I: usize, const C2: usize> DotProduct<T,
     }
 }
 
-impl<T: Element, const R1: usize, const I: usize, const C2: usize> Mul<Matrix<T, I, C2>> for Matrix<T, R1, I> {
+impl<T: Element, const R1: usize, const I: usize, const C2: usize> Mul<Matrix<T, I, C2>>
+    for Matrix<T, R1, I>
+{
     type Output = Matrix<T, R1, C2>;
 
     fn mul(self, m2: Matrix<T, I, C2>) -> Self::Output {
@@ -282,8 +286,8 @@ impl<T: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for [[T; 
 
 #[cfg(test)]
 mod tests {
-    use crate::from_mat::FromMat;
     use super::*;
+    use crate::from_mat::FromMat;
 
     #[test]
     fn zeros() {
@@ -320,7 +324,6 @@ mod tests {
         assert_eq!(matrix[(1, 0)], 0);
         assert_eq!(matrix[(1, 1)], 1);
     }
-
 
     #[test]
     fn indexing() {
@@ -439,6 +442,4 @@ mod tests {
         assert_eq!(result[(1, 0)], 3);
         assert_eq!(result[(1, 1)], 4);
     }
-
-
 }

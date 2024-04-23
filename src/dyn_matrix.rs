@@ -1,9 +1,8 @@
 use std::ops::{Add, Index, IndexMut, Mul, Sub};
 
-use crate::dims::{Dims, Rows, Cols, HasDims};
+use crate::dims::{Cols, Dims, HasDims, Rows};
 use crate::element::Element;
 // use crate::my_traits::{AreNotSame, IsTrue, Multiplied, TheTypes, Values, AreEqual};
-
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +14,8 @@ pub struct DynMatrix<T: Element> {
 impl<T: Element> DynMatrix<T> {
     /// Create a new matrix with all elements set to zero.
     pub fn zeros<D>(dims: D) -> Self
-        where D: Into<Dims>
+    where
+        D: Into<Dims>,
     {
         let Dims(Rows(r), Cols(c)) = dims.into();
         Self {
@@ -30,14 +30,14 @@ impl<T: Element> DynMatrix<T> {
     }
 
     pub fn ones<D>(dims: D) -> Self
-        where D: Into<Dims>
+    where
+        D: Into<Dims>,
     {
         let Dims(Rows(r), Cols(c)) = dims.into();
         Self {
             els: vec![vec![T::one(); c]; r],
         }
     }
-
 
     pub fn ones_like(m: &Self) -> Self {
         Self {
@@ -47,7 +47,8 @@ impl<T: Element> DynMatrix<T> {
 
     /// Create a new matrix of the given size from a flat array
     pub fn from_flat<D>(data: &[T], dims: D) -> Self
-        where D: Into<Dims>
+    where
+        D: Into<Dims>,
     {
         let Dims(Rows(r), Cols(c)) = dims.into();
         let num_els = r * c;
@@ -59,7 +60,6 @@ impl<T: Element> DynMatrix<T> {
             }
         }
         matrix
-    
     }
 
     /// Create a new matrix of the given size from a nested array
@@ -84,7 +84,8 @@ impl<T: Element> DynMatrix<T> {
     }
 
     pub fn identity<D>(dims: D) -> Self
-        where D: Into<Dims>
+    where
+        D: Into<Dims>,
     {
         let Dims(Rows(r), Cols(c)) = dims.into();
         let mut matrix = Self::zeros((r, c));
@@ -100,7 +101,6 @@ impl<T: Element> DynMatrix<T> {
             matrix.els[i][i] = T::one();
         }
         matrix
-    
     }
 
     pub fn transpose(&self) -> Self {
@@ -144,7 +144,6 @@ impl<'a, T: Element> Iterator for DynMatrixIterator<'a, T> {
         } else {
             None
         }
-    
     }
 }
 
@@ -295,7 +294,7 @@ mod tests {
     #[test]
     fn zeros() {
         let matrix = DynMatrix::<u8>::zeros((2, 2));
-        
+
         assert_eq!(matrix[(0, 0)], 0);
         assert_eq!(matrix[(0, 1)], 0);
         assert_eq!(matrix[(1, 0)], 0);
@@ -328,7 +327,6 @@ mod tests {
         assert_eq!(matrix[(1, 0)], 0);
         assert_eq!(matrix[(1, 1)], 1);
     }
-
 
     #[test]
     fn indexing() {
@@ -367,8 +365,8 @@ mod tests {
 
     #[test]
     fn add() {
-        let matrix1 = DynMatrix::<u8>::from_flat(&[1, 2, 3, 4], (2,2));
-        let matrix2 = DynMatrix::<u8>::from_flat(&[5, 6, 7, 8], (2,2));
+        let matrix1 = DynMatrix::<u8>::from_flat(&[1, 2, 3, 4], (2, 2));
+        let matrix2 = DynMatrix::<u8>::from_flat(&[5, 6, 7, 8], (2, 2));
         let result = matrix1 + matrix2;
         assert_eq!(result[(0, 0)], 6);
         assert_eq!(result[(0, 1)], 8);

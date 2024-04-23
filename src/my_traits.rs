@@ -10,7 +10,7 @@ impl IsFalse for Eval<false> {}
 
 pub struct TheTypes<T, U> {
     __p1: PhantomData<T>,
-    __p2: PhantomData<U>
+    __p2: PhantomData<U>,
 }
 pub trait AreSame {}
 pub trait AreNotSame {}
