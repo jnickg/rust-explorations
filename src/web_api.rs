@@ -1,3 +1,4 @@
+use jnickg_imaging::dyn_matrix::DynMatrix;
 use utoipa::OpenApi;
 
 use crate::*;
@@ -10,7 +11,8 @@ use crate::*;
         delete_something,
         post_something,
         post_something_with_id,
-        post_image
+        post_image,
+        post_matrix_with_name
     ),
     tags(
         (name = "jnickg_imaging", description = "Toy Image Processing API")
@@ -151,6 +153,87 @@ pub async fn post_something_with_id(State(app_state): AppState, Path(id): Path<u
         )
             .into_response(),
     }
+}
+
+#[utoipa::path(
+    post,
+    path = "/matrix/{name}",
+    responses(
+        (status = StatusCode::CREATED, description = "Added matrix with the given name", body = str),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed parse matrix from request body", body = ()),
+        (status = StatusCode::CONFLICT, description = "Cannot POST new matrix with existing name. If this is intentional, use PUT", body = ())
+    )
+)]
+pub async fn post_matrix_with_name(
+    State(app_state): AppState,
+    Path(name): Path<String>,
+    request: Request,
+) -> Response {
+    let mat_from_req = DynMatrix::<f64>::from_request(request, &app_state).await;
+    match mat_from_req {
+        Ok(new_mat) => {
+            let app = &mut app_state.write().await;
+            match app.matrices.contains_key(&name) {
+                true => (
+                    StatusCode::CONFLICT,
+                    "Cannot POST new matrix with existing name. If this is intentional, use PUT",
+                )
+                    .into_response(),
+                false => {
+                    app.matrices.insert(name.clone(), new_mat.clone());
+                    (StatusCode::CREATED, format!("Matrix {} received.\n", name)).into_response()
+                }
+            }
+        }
+        Err(_) => {
+            println!("Failed to deserialize matrix name from string: {}", name);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read matrix from request.\n",
+            )
+                .into_response()
+        }
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/matrix/{name}",
+    responses(
+        (status = StatusCode::OK, description = "Returns matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::NOT_FOUND, description = "Unable to find matrix withthe given name", body = ()),
+    )
+)]
+pub async fn get_matrix(State(app_state): AppState, Path(name): Path<String>) -> Response {
+    let app = &mut app_state.read().await;
+    match app.matrices.get(&name) {
+        Some(mat) => (StatusCode::OK, mat.clone()).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            format!("Matrix {} not found.\n", name),
+        )
+            .into_response(),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/matrix/multiply/{name1}/{name2}",
+    responses(
+        (status = StatusCode::OK, description = "Computation completed and result is returned in JSON format", body = DynMatrix<f64>),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Invalid matrix multiplication", body = ()),
+    )
+)]
+pub async fn post_matrix_multiply(
+    State(app_state): AppState,
+    Path((name1, name2)): Path<(String, String)>,
+) -> Response {
+    let app = &mut app_state.write().await;
+    let mat1 = app.matrices.get(&name1).unwrap();
+    let mat2 = app.matrices.get(&name2).unwrap();
+    let result = mat1 * mat2;
+    // Return result in body
+    (StatusCode::OK, result.clone()).into_response()
 }
 
 #[utoipa::path(

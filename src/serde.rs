@@ -58,7 +58,7 @@ impl<T: Element> Serialize for DynMatrix<T> {
     }
 }
 
-struct MatrixVisitor<T: Element, const R: usize, const C: usize> {
+pub struct MatrixVisitor<T: Element, const R: usize, const C: usize> {
     marker: std::marker::PhantomData<T>,
 }
 
@@ -112,7 +112,7 @@ where
 }
 
 // Needed so that we can tell serde we expect our sequence to always contain nested sequences
-struct DynMatrixVisitor<T: Element> {
+pub struct DynMatrixVisitor<T: Element> {
     marker: std::marker::PhantomData<T>,
 }
 

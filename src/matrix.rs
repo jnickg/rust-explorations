@@ -2,7 +2,10 @@ use crate::{
     dims::{Dims, HasDims},
     element::Element,
 };
-use std::ops::{Add, Index, IndexMut, Mul, Sub};
+use std::{
+    fmt::Display,
+    ops::{Add, Index, IndexMut, Mul, Sub},
+};
 use utoipa::ToSchema;
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
@@ -281,6 +284,19 @@ impl<T: Element, const R: usize, const C: usize> Mul<T> for Matrix<T, R, C> {
 impl<T: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for [[T; C]; R] {
     fn from(matrix: Matrix<T, R, C>) -> Self {
         matrix.els
+    }
+}
+
+impl<T: Element, const R: usize, const C: usize> From<&Matrix<T, R, C>> for String {
+    fn from(matrix: &Matrix<T, R, C>) -> Self {
+        serde_json::to_string(matrix).unwrap()
+    }
+}
+
+impl<T: Element, const R: usize, const C: usize> Display for Matrix<T, R, C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let json: String = self.into();
+        write!(f, "{}", json)
     }
 }
 

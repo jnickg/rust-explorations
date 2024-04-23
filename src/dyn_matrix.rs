@@ -1,7 +1,9 @@
-use std::ops::{Add, Index, IndexMut, Mul, Sub};
+use std::fmt::Display;
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub};
 
 use crate::dims::{Cols, Dims, HasDims, Rows};
 use crate::element::Element;
+use crate::matrix::Matrix;
 // use crate::my_traits::{AreNotSame, IsTrue, Multiplied, TheTypes, Values, AreEqual};
 
 /// A matrix of elements of type `T`, with `R` rows and `C` columns.
@@ -218,19 +220,38 @@ impl<T: Element> IndexMut<(usize, usize)> for DynMatrix<T> {
     }
 }
 
-impl<T: Element> Add for DynMatrix<T> {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self::Output {
+#[auto_impl_ops::auto_ops]
+impl<T: Element> AddAssign<&DynMatrix<T>> for DynMatrix<T>
+where
+    for<'x> &'x T: Add<Output = T>,
+{
+    fn add_assign(&mut self, other: &Self) {
         assert_eq!(self.rows(), other.rows());
         assert_eq!(self.cols(), other.cols());
-        let mut result = DynMatrix::<T>::zeros(self.dims());
         for i in 0..self.rows() {
             for j in 0..self.cols() {
-                result[(i, j)] = self[(i, j)] + other[(i, j)];
+                self[(i, j)] += other[(i, j)];
             }
         }
-        result
+    }
+}
+
+#[auto_impl_ops::auto_ops]
+impl<'a, T: Element> MulAssign<&'a DynMatrix<T>> for DynMatrix<T>
+where
+    T: Element + Sized + for<'x> MulAssign<&'x T>,
+{
+    fn mul_assign(&mut self, other: &DynMatrix<T>) {
+        assert_eq!(self.cols(), other.rows());
+        let mut result = DynMatrix::zeros((self.rows(), other.cols()));
+        for i in 0..self.rows() {
+            for j in 0..other.cols() {
+                for k in 0..self.cols() {
+                    result[(i, j)] += self[(i, k)] * other[(k, j)];
+                }
+            }
+        }
+        *self = result;
     }
 }
 
@@ -242,23 +263,6 @@ impl<T: Element> Sub for DynMatrix<T> {
         for i in 0..self.rows() {
             for j in 0..self.cols() {
                 result[(i, j)] = self[(i, j)] - other[(i, j)];
-            }
-        }
-        result
-    }
-}
-
-impl<T: Element> Mul for DynMatrix<T> {
-    type Output = Self;
-
-    fn mul(self, other: DynMatrix<T>) -> Self::Output {
-        assert_eq!(self.cols(), other.rows());
-        let mut result = DynMatrix::zeros((self.rows(), other.cols()));
-        for i in 0..self.rows() {
-            for j in 0..other.cols() {
-                for k in 0..self.cols() {
-                    result[(i, j)] += self[(i, k)] * other[(k, j)];
-                }
             }
         }
         result
@@ -282,6 +286,31 @@ impl<T: Element> Mul<T> for DynMatrix<T> {
 impl<T: Element> From<DynMatrix<T>> for Vec<Vec<T>> {
     fn from(matrix: DynMatrix<T>) -> Self {
         matrix.els
+    }
+}
+
+impl<T: Element> From<&DynMatrix<T>> for String {
+    fn from(matrix: &DynMatrix<T>) -> Self {
+        serde_json::to_string(matrix).unwrap()
+    }
+}
+
+impl<T: Element> Display for DynMatrix<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let json: String = self.into();
+        write!(f, "{}", json)
+    }
+}
+
+impl<T: Element, const R: usize, const C: usize> From<Matrix<T, R, C>> for DynMatrix<T> {
+    fn from(matrix: Matrix<T, R, C>) -> Self {
+        let mut result = DynMatrix::zeros((R, C));
+        for i in 0..R {
+            for j in 0..C {
+                result[(i, j)] = matrix[(i, j)];
+            }
+        }
+        result
     }
 }
 

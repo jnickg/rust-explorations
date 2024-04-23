@@ -66,7 +66,15 @@ async fn main() {
                 .delete(api::delete_something)
                 .post(api::post_something_with_id),
         )
-        .route("/image", post(api::post_image));
+        .route("/image", post(api::post_image))
+        .route(
+            "/matrix/:name",
+            post(api::post_matrix_with_name).get(api::get_matrix),
+        )
+        .route(
+            "/matrix/multiply/:name1/:name2",
+            post(api::post_matrix_multiply),
+        );
 
     let swagger_ui =
         SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api::Documentation::openapi());

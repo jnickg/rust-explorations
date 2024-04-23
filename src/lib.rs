@@ -1,3 +1,4 @@
+pub mod axum;
 pub mod buffer_element;
 pub mod circular_buffer;
 pub mod dims;
