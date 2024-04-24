@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 
-use crate::{dyn_matrix::DynMatrix, element::Element};
+use crate::{dims::{Cols, Dims, Rows}, dyn_matrix::DynMatrix, element::Element};
 
 impl<T: Element> IntoResponse for DynMatrix<T> {
     fn into_response(self) -> Response {
@@ -28,5 +28,12 @@ where
             .await
             .map_err(|_| ())?;
         Ok(matrix)
+    }
+}
+
+impl IntoResponse for Dims {
+    fn into_response(self) -> Response {
+        let Dims(Rows(r), Cols(c)) = self;
+        (StatusCode::OK, Json(&(r,c))).into_response()
     }
 }

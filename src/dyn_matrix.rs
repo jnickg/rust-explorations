@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
 use crate::dims::{Cols, Dims, HasDims, Rows};
 use crate::element::Element;
@@ -237,6 +237,50 @@ where
 }
 
 #[auto_impl_ops::auto_ops]
+impl<T: Element> AddAssign<&T> for DynMatrix<T>
+where
+    for<'x> &'x T: Add<Output = T>,
+{
+    fn add_assign(&mut self, other: &T) {
+        for i in 0..self.rows() {
+            for j in 0..self.cols() {
+                self[(i, j)] += *other;
+            }
+        }
+    }
+}
+
+#[auto_impl_ops::auto_ops]
+impl<T: Element> SubAssign<&DynMatrix<T>> for DynMatrix<T>
+where
+    for<'x> &'x T: Sub<Output = T>,
+{
+    fn sub_assign(&mut self, other: &Self) {
+        assert_eq!(self.rows(), other.rows());
+        assert_eq!(self.cols(), other.cols());
+        for i in 0..self.rows() {
+            for j in 0..self.cols() {
+                self[(i, j)] -= other[(i, j)];
+            }
+        }
+    }
+}
+
+#[auto_impl_ops::auto_ops]
+impl<T: Element> SubAssign<&T> for DynMatrix<T>
+where
+    for<'x> &'x T: Sub<Output = T>,
+{
+    fn sub_assign(&mut self, other: &T) {
+        for i in 0..self.rows() {
+            for j in 0..self.cols() {
+                self[(i, j)] -= *other;
+            }
+        }
+    }
+}
+
+#[auto_impl_ops::auto_ops]
 impl<'a, T: Element> MulAssign<&'a DynMatrix<T>> for DynMatrix<T>
 where
     T: Element + Sized + for<'x> MulAssign<&'x T>,
@@ -255,31 +299,17 @@ where
     }
 }
 
-impl<T: Element> Sub for DynMatrix<T> {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Self::Output {
-        let mut result = DynMatrix::zeros_like(&self);
+#[auto_impl_ops::auto_ops]
+impl<'a, T: Element> MulAssign<&'a T> for DynMatrix<T>
+where
+    T: Element + Sized + for<'x> MulAssign<&'x T>,
+{
+    fn mul_assign(&mut self, other: &T) {
         for i in 0..self.rows() {
             for j in 0..self.cols() {
-                result[(i, j)] = self[(i, j)] - other[(i, j)];
+                self[(i, j)] *= other;
             }
         }
-        result
-    }
-}
-
-impl<T: Element> Mul<T> for DynMatrix<T> {
-    type Output = Self;
-
-    fn mul(self, scalar: T) -> Self::Output {
-        let mut result = DynMatrix::zeros_like(&self);
-        for i in 0..self.rows() {
-            for j in 0..self.cols() {
-                result[(i, j)] = self[(i, j)] * scalar;
-            }
-        }
-        result
     }
 }
 

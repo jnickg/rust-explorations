@@ -1,4 +1,4 @@
-use jnickg_imaging::dyn_matrix::DynMatrix;
+use jnickg_imaging::{dims::HasDims, dyn_matrix::DynMatrix};
 use utoipa::OpenApi;
 
 use crate::*;
@@ -217,6 +217,89 @@ pub async fn get_matrix(State(app_state): AppState, Path(name): Path<String>) ->
 }
 
 #[utoipa::path(
+    get,
+    path = "/matrix/{name}/dims",
+    responses(
+        (status = StatusCode::OK, description = "Returns dimensions of the matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::NOT_FOUND, description = "Unable to find matrix withthe given name", body = ()),
+    )
+)]
+pub async fn get_matrix_dims(State(app_state): AppState, Path(name): Path<String>) -> Response {
+    let app = &mut app_state.read().await;
+    match app.matrices.get(&name) {
+        Some(mat) => {
+            let dims = mat.dims();
+            (StatusCode::OK, dims).into_response()
+        },
+        None => (
+            StatusCode::NOT_FOUND,
+            format!("Matrix {} not found.\n", name),
+        )
+            .into_response(),
+    }
+}
+
+#[utoipa::path(
+    put,
+    path = "/matrix/{name}",
+    responses(
+        (status = StatusCode::OK, description = "Updated matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::CREATED, description = "Created matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::NOT_FOUND, description = "Unable to find matrix withthe given name", body = ()),
+    )
+)]
+pub async fn put_matrix(
+    State(app_state): AppState,
+    Path(name): Path<String>,
+    request: Request,
+) -> Response {
+    let mat_from_req = DynMatrix::<f64>::from_request(request, &app_state).await;
+    match mat_from_req {
+        Ok(new_mat) => {
+            let app = &mut app_state.write().await;
+            match app.matrices.contains_key(&name) {
+                true => {
+                    app.matrices.insert(name.clone(), new_mat.clone());
+                    (StatusCode::OK, new_mat).into_response()
+                }
+                false => {
+                    app.matrices.insert(name.clone(), new_mat.clone());
+                    (StatusCode::CREATED, new_mat).into_response()
+                }
+            }
+        }
+        Err(_) => {
+            println!("Failed to deserialize matrix name from string: {}", name);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read matrix from request.\n",
+            )
+                .into_response()
+        }
+    }
+}
+
+#[utoipa::path(
+    delete,
+    path = "/matrix/{name}",
+    responses(
+        (status = StatusCode::OK, description = "Deleted matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::NOT_FOUND, description = "Unable to find matrix withthe given name", body = ()),
+    )
+)]
+pub async fn delete_matrix(State(app_state): AppState, Path(name): Path<String>) -> Response {
+    let app = &mut app_state.write().await;
+    match app.matrices.remove(&name) {
+        Some(mat) => (StatusCode::OK, mat).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            format!("Matrix {} not found.\n", name),
+        )
+            .into_response(),
+    }
+}
+
+#[utoipa::path(
     post,
     path = "/matrix/multiply/{name1}/{name2}",
     responses(
@@ -235,6 +318,48 @@ pub async fn post_matrix_multiply(
     // Return result in body
     (StatusCode::OK, result.clone()).into_response()
 }
+
+#[utoipa::path(
+    post,
+    path = "/matrix/add/{name1}/{name2}",
+    responses(
+        (status = StatusCode::OK, description = "Computation completed and result is returned in JSON format", body = DynMatrix<f64>),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Invalid matrix addition (check matrix dimensions)", body = ()),
+    )
+)]
+pub async fn post_matrix_add(
+    State(app_state): AppState,
+    Path((name1, name2)): Path<(String, String)>,
+) -> Response {
+    let app = &mut app_state.write().await;
+    let mat1 = app.matrices.get(&name1).unwrap();
+    let mat2 = app.matrices.get(&name2).unwrap();
+    let result = mat1 + mat2;
+    // Return result in body
+    (StatusCode::OK, result.clone()).into_response()
+}
+
+#[utoipa::path(
+    post,
+    path = "/matrix/subtract/{name1}/{name2}",
+    responses(
+        (status = StatusCode::OK, description = "Computation completed and result is returned in JSON format", body = DynMatrix<f64>),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Invalid matrix subtraction (check matrix dimensions)", body = ()),
+    )
+)]
+pub async fn post_matrix_subtract(
+    State(app_state): AppState,
+    Path((name1, name2)): Path<(String, String)>,
+) -> Response {
+    let app = &mut app_state.write().await;
+    let mat1 = app.matrices.get(&name1).unwrap();
+    let mat2 = app.matrices.get(&name2).unwrap();
+    let result = mat1 - mat2;
+    // Return result in body
+    (StatusCode::OK, result.clone()).into_response()
+}
+
+
 
 #[utoipa::path(
     post,

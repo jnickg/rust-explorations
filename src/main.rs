@@ -69,11 +69,26 @@ async fn main() {
         .route("/image", post(api::post_image))
         .route(
             "/matrix/:name",
-            post(api::post_matrix_with_name).get(api::get_matrix),
+            post(api::post_matrix_with_name)
+            .get(api::get_matrix)
+            .put(api::put_matrix)
+            .delete(api::delete_matrix),
+        )
+        .route(
+            "/matrix/:name/dims",
+            get(api::get_matrix_dims)
         )
         .route(
             "/matrix/multiply/:name1/:name2",
             post(api::post_matrix_multiply),
+        )
+        .route(
+            "/matrix/add/:name1/:name2",
+            post(api::post_matrix_add),
+        )
+        .route(
+            "/matrix/subtract/:name1/:name2",
+            post(api::post_matrix_subtract),
         );
 
     let swagger_ui =
