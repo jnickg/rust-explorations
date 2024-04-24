@@ -7,7 +7,15 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 
-use crate::{dims::{Cols, Dims, Rows}, dyn_matrix::DynMatrix, element::Element};
+use crate::{dims::{Cols, Dims, Rows}, dyn_matrix::DynMatrix, element::Element, matrix::Matrix};
+
+impl<T: Element, const R: usize, const C: usize> IntoResponse for &Matrix<T, R, C> {
+    fn into_response(self) -> Response {
+        let _status = StatusCode::OK;
+        let _obj = Json(vec![[1, 2, 3]]);
+        todo!();
+    }
+}
 
 impl<T: Element> IntoResponse for DynMatrix<T> {
     fn into_response(self) -> Response {

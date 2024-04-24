@@ -1,13 +1,43 @@
 <html>
   <head>
-    <title>JIS | jnickg Imaging service</title>
+    <title>Imaging API</title>
+    <link rel="stylesheet" href="{{stylesheet}}">
   </head>
   <body>
-    <h1>
-        Todo!
-    </h1>
-    <p>
-      Todo. Lorem ipsum ipso facto whosa whatsa.
-    </p>
+    <h1><code>jnickg_rust_explorations</code></h1>
+    <h2>Documentation</h2>
+    <ul>
+      <li>Swagger (<a href="swagger-ui/">UI</a>, <a href="/api-docs/openapi.json">JSON</a>)</li>
+      <li>Redoc (<a href="/redoc">UI</a>)</li>
+      <li>Rapidoc (<a href="/rapidoc">UI</a>)</li>
+    </ul>
+    <h2>Matrices</h2>
+    {% if matrices.len() > 0 %}
+      <p>There are {{ matrices.len() }} matrices:</p>
+      <table>
+        <tr>
+          <td><b>Name</b></td>
+          <td><b>JSON</b></td>
+          <td><b>URL</b></td>
+          <td><b>URL (Dims)</b></td>
+        </tr>
+        {% for kvp in matrices %}
+          <tr>
+            <td>"{{kvp.0}}"</td>
+            <td>
+              {{kvp.1}}
+            </td>
+            <td>
+              <a href="/api/v1/matrix/{{kvp.0}}">/api/v1/matrix/{{kvp.0}}</a>
+            </td>
+            <td>
+              <a href="/api/v1/matrix/{{kvp.0}}/dims">/api/v1/matrix/{{kvp.0}}/dims</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p>There are no matrices.</p>
+    {% endif %}
   </body>
 </html>

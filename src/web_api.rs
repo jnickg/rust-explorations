@@ -1,4 +1,7 @@
-use jnickg_imaging::{dims::HasDims, dyn_matrix::DynMatrix};
+use std::collections::HashMap;
+
+use askama::Template;
+use jnickg_imaging::{dims::{Dims, HasDims}, dyn_matrix::DynMatrix};
 use utoipa::OpenApi;
 
 use crate::*;
@@ -12,7 +15,20 @@ use crate::*;
         post_something,
         post_something_with_id,
         post_image,
-        post_matrix_with_name
+        post_matrix_with_name,
+        get_matrix,
+        put_matrix,
+        delete_matrix,
+        post_matrix_add,
+        post_matrix_subtract,
+        post_matrix_multiply,
+        get_matrix_dims
+    ),
+    components(
+        schemas(
+            DynMatrix<f64>,
+            Dims
+        )
     ),
     tags(
         (name = "jnickg_imaging", description = "Toy Image Processing API")
@@ -20,8 +36,25 @@ use crate::*;
 )]
 pub struct Documentation;
 
-pub async fn get_index() -> Response {
-    (StatusCode::OK, "Welcome to my website.").into_response()
+#[derive(Template)]
+#[template(path = "index.html")]
+pub struct IndexTemplate<'a> {
+    matrices: &'a HashMap<String, DynMatrix<f64>>,
+    stylesheet: &'static str,
+}
+
+impl<'a> IndexTemplate<'a> {
+    fn new(matrices: &'a HashMap<String, DynMatrix<f64>>) -> Self {
+        Self {
+            matrices,
+            stylesheet: "/style.css",
+        }
+    }
+}
+
+pub async fn get_index(State(app_state): AppState) -> Response {
+    let app = &mut app_state.read().await;
+    (StatusCode::OK, IndexTemplate::new(&app.matrices)).into_response()
 }
 
 pub async fn get_hello() -> Response {
@@ -30,7 +63,7 @@ pub async fn get_hello() -> Response {
 
 #[utoipa::path(
     get,
-    path = "/something/{id}",
+    path = "/api/v1/something/{id}",
     responses(
         (status = StatusCode::OK, description = "Shows something with that ID", body = ()),
         (status = StatusCode::NOT_FOUND, description = "No such something", body = ())
@@ -54,7 +87,7 @@ pub async fn get_something(State(app_state): AppState, Path(id): Path<u32>) -> R
 
 #[utoipa::path(
     put,
-    path = "/something/{id}",
+    path = "/api/v1/something/{id}",
     responses(
         (status = StatusCode::OK, description = "Updated the given something", body = ()),
         (status = StatusCode::CREATED, description = "Created something with the given ID", body = ())
@@ -80,7 +113,7 @@ pub async fn put_something(State(app_state): AppState, Path(id): Path<u32>) -> R
 
 #[utoipa::path(
     delete,
-    path = "/something/{id}",
+    path = "/api/v1/something/{id}",
     responses(
         (status = StatusCode::OK, description = "Deleted the given something", body = ()),
         (status = StatusCode::NOT_FOUND, description = "No something with the given ID to delete", body = ())
@@ -105,7 +138,7 @@ pub async fn delete_something(State(app_state): AppState, Path(id): Path<u32>) -
 
 #[utoipa::path(
     post,
-    path = "/something",
+    path = "/api/v1/something",
     responses(
         (status = StatusCode::CREATED, description = "Created new something with the returned ID", body = str)
     )
@@ -132,7 +165,7 @@ pub async fn post_something(State(app_state): AppState) -> Response {
 
 #[utoipa::path(
     post,
-    path = "/something/{id}",
+    path = "/api/v1/something/{id}",
     responses(
         (status = StatusCode::CREATED, description = "Created new something with the returned ID", body = str),
         (status = StatusCode::CONFLICT, description = "Something with that ID already exists", body = ())
@@ -157,7 +190,11 @@ pub async fn post_something_with_id(State(app_state): AppState, Path(id): Path<u
 
 #[utoipa::path(
     post,
-    path = "/matrix/{name}",
+    path = "/api/v1/api/v1/matrix/{name}",
+    request_body(
+        content = DynMatrix<f64>,
+        content_type = "application/json"
+    ),
     responses(
         (status = StatusCode::CREATED, description = "Added matrix with the given name", body = str),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed parse matrix from request body", body = ()),
@@ -198,9 +235,9 @@ pub async fn post_matrix_with_name(
 
 #[utoipa::path(
     get,
-    path = "/matrix/{name}",
+    path = "/api/v1/matrix/{name}",
     responses(
-        (status = StatusCode::OK, description = "Returns matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::OK, description = "Returns matrix with the given name", body = MatrixSchema<f64>),
         (status = StatusCode::NOT_FOUND, description = "Unable to find matrix withthe given name", body = ()),
     )
 )]
@@ -218,9 +255,9 @@ pub async fn get_matrix(State(app_state): AppState, Path(name): Path<String>) ->
 
 #[utoipa::path(
     get,
-    path = "/matrix/{name}/dims",
+    path = "/api/v1/matrix/{name}/dims",
     responses(
-        (status = StatusCode::OK, description = "Returns dimensions of the matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::OK, description = "Returns dimensions of the matrix with the given name", body = Dims),
         (status = StatusCode::NOT_FOUND, description = "Unable to find matrix withthe given name", body = ()),
     )
 )]
@@ -241,7 +278,11 @@ pub async fn get_matrix_dims(State(app_state): AppState, Path(name): Path<String
 
 #[utoipa::path(
     put,
-    path = "/matrix/{name}",
+    path = "/api/v1/matrix/{name}",
+    request_body(
+        content = DynMatrix<f64>,
+        content_type = "application/json"
+    ),
     responses(
         (status = StatusCode::OK, description = "Updated matrix with the given name", body = DynMatrix<f64>),
         (status = StatusCode::CREATED, description = "Created matrix with the given name", body = DynMatrix<f64>),
@@ -281,9 +322,9 @@ pub async fn put_matrix(
 
 #[utoipa::path(
     delete,
-    path = "/matrix/{name}",
+    path = "/api/v1/matrix/{name}",
     responses(
-        (status = StatusCode::OK, description = "Deleted matrix with the given name", body = DynMatrix<f64>),
+        (status = StatusCode::OK, description = "Deleted matrix with the given name and returned it", body = DynMatrix<f64>),
         (status = StatusCode::NOT_FOUND, description = "Unable to find matrix withthe given name", body = ()),
     )
 )]
@@ -301,7 +342,7 @@ pub async fn delete_matrix(State(app_state): AppState, Path(name): Path<String>)
 
 #[utoipa::path(
     post,
-    path = "/matrix/multiply/{name1}/{name2}",
+    path = "/api/v1/matrix/multiply/{name1}/{name2}",
     responses(
         (status = StatusCode::OK, description = "Computation completed and result is returned in JSON format", body = DynMatrix<f64>),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Invalid matrix multiplication", body = ()),
@@ -321,7 +362,7 @@ pub async fn post_matrix_multiply(
 
 #[utoipa::path(
     post,
-    path = "/matrix/add/{name1}/{name2}",
+    path = "/api/v1/matrix/add/{name1}/{name2}",
     responses(
         (status = StatusCode::OK, description = "Computation completed and result is returned in JSON format", body = DynMatrix<f64>),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Invalid matrix addition (check matrix dimensions)", body = ()),
@@ -341,7 +382,7 @@ pub async fn post_matrix_add(
 
 #[utoipa::path(
     post,
-    path = "/matrix/subtract/{name1}/{name2}",
+    path = "/api/v1/matrix/subtract/{name1}/{name2}",
     responses(
         (status = StatusCode::OK, description = "Computation completed and result is returned in JSON format", body = DynMatrix<f64>),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Invalid matrix subtraction (check matrix dimensions)", body = ()),
@@ -363,9 +404,13 @@ pub async fn post_matrix_subtract(
 
 #[utoipa::path(
     post,
-    path = "/image",
+    path = "/api/v1/image",
+    request_body(
+        content = Bytes,
+        content_type = "image/png"
+    ),
     responses(
-        (status = StatusCode::CREATED, description = "Added the image with the returned ID", body = str),
+        (status = StatusCode::CREATED, description = "Added the image with the returned ID", body = ()),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
         (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
         (status = StatusCode::NOT_ACCEPTABLE, description = "Only PNG images are supported.", body = ())
