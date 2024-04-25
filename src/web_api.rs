@@ -538,20 +538,35 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
         (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
     )
 )]
-pub async fn get_image(State(app_state): AppState, Path(name): Path<String>, request: Request) -> Response {
+pub async fn get_image(
+    State(app_state): AppState,
+    Path(name): Path<String>,
+    request: Request,
+) -> Response {
+    // If name has an extension, try to discern the desired format from it. But drop the extension
+    // for the purpose of image lookup. We try to adhere to user request, but default to PNG if
+    // anything goes wrong
+    let ext_str = name.split('.').last().unwrap_or("png");
+    let format_from_ext: Option<ImageFormat> = match ImageFormat::from_extension(ext_str) {
+        Some(fmt) => Some(fmt),
+        None => None,
+    };
+    let default_format = format_from_ext.unwrap_or(ImageFormat::Png);
+
+    let name_without_ext = name.split('.').next().unwrap_or(name.as_str());
     let app = &mut app_state.read().await;
-    match app.images.get(&name) {
+    match app.images.get(name_without_ext) {
         Some(image) => {
-            // We try to adhere to user request, but default to PNG if anything goes wrong
+            // If a header is specified, prefer to honor that over what might be in the request URL
             let dest_format = match request.headers().get("Accept") {
                 Some(accept_hdr) => {
                     let accept = accept_hdr.to_str().unwrap();
                     match ImageFormat::from_mime_type(accept) {
                         Some(fmt) => fmt,
-                        None => ImageFormat::Png,
+                        None => default_format,
                     }
                 }
-                None => ImageFormat::Png,
+                None => default_format,
             };
             let mut data = Vec::new();
             let mut cursor = Cursor::new(&mut data);
