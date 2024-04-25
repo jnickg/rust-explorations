@@ -7,7 +7,12 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 
-use crate::{dims::{Cols, Dims, Rows}, dyn_matrix::DynMatrix, element::Element, matrix::Matrix};
+use crate::{
+    dims::{Cols, Dims, Rows},
+    dyn_matrix::DynMatrix,
+    element::Element,
+    matrix::Matrix,
+};
 
 impl<T: Element, const R: usize, const C: usize> IntoResponse for &Matrix<T, R, C> {
     fn into_response(self) -> Response {
@@ -42,6 +47,6 @@ where
 impl IntoResponse for Dims {
     fn into_response(self) -> Response {
         let Dims(Rows(r), Cols(c)) = self;
-        (StatusCode::OK, Json(&(r,c))).into_response()
+        (StatusCode::OK, Json(&(r, c))).into_response()
     }
 }

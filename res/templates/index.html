@@ -11,6 +11,7 @@
       <li>Redoc (<a href="/redoc">UI</a>)</li>
       <li>Rapidoc (<a href="/rapidoc">UI</a>)</li>
     </ul>
+
     <h2>Matrices</h2>
     {% if matrices.len() > 0 %}
       <p>There are {{ matrices.len() }} matrices:</p>
@@ -39,5 +40,27 @@
     {% else %}
       <p>There are no matrices.</p>
     {% endif %}
+
+    <h2>Images</h2>
+    {% if images.len() > 0 %}
+      <p>There are {{ images.len() }} images:</p>
+      <table>
+        <tr>
+          <td><b>Name</b></td>
+          <td><b>URL</b></td>
+        </tr>
+        {% for kvp in images %}
+          <tr>
+            <td>"{{kvp.0}}"</td>
+            <td>
+              <a href="/api/v1/image/{{kvp.0}}">/api/v1/image/{{kvp.0}}</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p>There are no images.</p>
+    {% endif %}
+
   </body>
 </html>

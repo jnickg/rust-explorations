@@ -67,25 +67,20 @@ async fn main() {
                 .post(api::post_something_with_id),
         )
         .route("/image", post(api::post_image))
+        .route("/image/:name", get(api::get_image))
         .route(
             "/matrix/:name",
             post(api::post_matrix_with_name)
-            .get(api::get_matrix)
-            .put(api::put_matrix)
-            .delete(api::delete_matrix),
+                .get(api::get_matrix)
+                .put(api::put_matrix)
+                .delete(api::delete_matrix),
         )
-        .route(
-            "/matrix/:name/dims",
-            get(api::get_matrix_dims)
-        )
+        .route("/matrix/:name/dims", get(api::get_matrix_dims))
         .route(
             "/matrix/multiply/:name1/:name2",
             post(api::post_matrix_multiply),
         )
-        .route(
-            "/matrix/add/:name1/:name2",
-            post(api::post_matrix_add),
-        )
+        .route("/matrix/add/:name1/:name2", post(api::post_matrix_add))
         .route(
             "/matrix/subtract/:name1/:name2",
             post(api::post_matrix_subtract),
