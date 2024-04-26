@@ -225,7 +225,7 @@ impl<T: Element, const R: usize, const C: usize> Sub for Matrix<T, R, C> {
     }
 }
 
-trait DotProduct<T: Element, const R2: usize, const C2: usize> {
+pub trait DotProduct<T: Element, const R2: usize, const C2: usize> {
     type Output: ?Sized;
 
     fn dot_product(&self, m2: Matrix<T, R2, C2>) -> Self::Output;

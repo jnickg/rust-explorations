@@ -3,6 +3,9 @@ name = "jnickg_rust_explorations"
 version = "0.1.0"
 edition = "2021"
 
+[toolchain]
+channel = "nightly"
+
 [lib]
 name = "jnickg_imaging"
 path = "src/lib.rs"

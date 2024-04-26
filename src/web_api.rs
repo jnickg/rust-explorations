@@ -547,11 +547,7 @@ pub async fn get_image(
     // for the purpose of image lookup. We try to adhere to user request, but default to PNG if
     // anything goes wrong
     let ext_str = name.split('.').last().unwrap_or("png");
-    let format_from_ext: Option<ImageFormat> = match ImageFormat::from_extension(ext_str) {
-        Some(fmt) => Some(fmt),
-        None => None,
-    };
-    let default_format = format_from_ext.unwrap_or(ImageFormat::Png);
+    let default_format = ImageFormat::from_extension(ext_str).unwrap_or(ImageFormat::Png);
 
     let name_without_ext = name.split('.').next().unwrap_or(name.as_str());
     let app = &mut app_state.read().await;

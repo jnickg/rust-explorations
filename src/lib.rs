@@ -1,4 +1,7 @@
+#![feature(test)]
+
 pub mod axum;
+pub mod array_slicer;
 pub mod buffer_element;
 pub mod circular_buffer;
 pub mod dims;
