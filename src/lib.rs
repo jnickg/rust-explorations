@@ -1,7 +1,6 @@
 #![feature(test)]
 
 pub mod axum;
-pub mod array_slicer;
 pub mod buffer_element;
 pub mod circular_buffer;
 pub mod dims;
@@ -15,3 +14,4 @@ pub mod my_image;
 pub mod my_traits;
 pub mod serde;
 pub mod utoipa;
+pub mod window_iterator;

@@ -1,3 +1,4 @@
+
 #[derive(Clone, Copy)]
 pub struct ImageDescriptor<'a, T> {
     data: &'a Vec<T>,
@@ -17,10 +18,10 @@ pub struct StrideDescriptor {
 /// Inclusive, so an ROI of x1=0, x2=0, y1=0, y2=0 windows into a single point
 #[derive(Clone, Copy)]
 pub struct RoiDescriptor {
-    x1: usize,
-    x2: usize,
-    y1: usize,
-    y2: usize,
+    x1: isize,
+    x2: isize,
+    y1: isize,
+    y2: isize,
 }
 
 #[derive(Clone, Copy)]
@@ -50,7 +51,7 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
         self
     }
 
-    pub fn with_roi(mut self, x1: usize, x2: usize, y1: usize, y2: usize) -> Self {
+    pub fn with_roi(mut self, x1: isize, x2: isize, y1: isize, y2: isize) -> Self {
         self.roi = Some(RoiDescriptor {
             x1,
             x2,
@@ -63,10 +64,23 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
     pub fn with_max_roi(mut self) -> Self {
         self.roi = Some(RoiDescriptor {
             x1: 0,
-            x2: self.image.width - 1,
+            x2: (self.image.width - 1).try_into().unwrap(),
             y1: 0,
-            y2: self.image.height - 1,
+            y2: (self.image.height - 1).try_into().unwrap(),
         });
+        self
+    }
+
+    pub fn shift_roi(mut self, dx: isize, dy: isize) -> Self {
+        self.roi = match self.roi {
+            Some(roi) => Some(RoiDescriptor {
+                x1: roi.x1 + dx,
+                x2: roi.x2 + dx,
+                y1: roi.y1 + dy,
+                y2: roi.y2 + dy,
+            }),
+            None => None,
+        };
         self
     }
 
@@ -77,8 +91,8 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
 
     pub fn build(self) -> ImageBufferWindow<'a, T> {
         let roi = self.roi.unwrap();
-        let dist_from_x1_to_x2 = roi.x2 - roi.x1;
-        let total_els = (roi.y2 - roi.y1 + 1) * (roi.x2 - roi.x1 + 1);
+        let dist_from_x1_to_x2: usize = (roi.x2 - roi.x1).try_into().unwrap();
+        let total_els: usize = ((roi.y2 - roi.y1 + 1) * (roi.x2 - roi.x1 + 1)).try_into().unwrap();
         ImageBufferWindow {
             image: self.image,
             stride: self.stride.unwrap(),
@@ -124,16 +138,22 @@ impl<'a, T> Iterator for ImageBufferWindowIterator<'a, T>
         let counter = self.window.counter;
         self.window.counter += 1;
 
-        let roi_x = counter % (self.window.dist_from_x1_to_x2 + 1) * self.window.stride.per_element;
-        let roi_y = counter / (self.window.dist_from_x1_to_x2 + 1) * self.window.stride.per_row;
-        let x = self.window.roi.x1 + roi_x;
-        let y = self.window.roi.y1 + roi_y;
+        let roi_x: isize = (counter % (self.window.dist_from_x1_to_x2 + 1) * self.window.stride.per_element).try_into().unwrap();
+        let roi_y: isize = (counter / (self.window.dist_from_x1_to_x2 + 1) * self.window.stride.per_row).try_into().unwrap();
 
-        if x >= self.window.image.width || y >= self.window.image.height {
+        let x: isize = self.window.roi.x1 + roi_x;
+        let y: isize = self.window.roi.y1 + roi_y;
+        if x < 0 || y < 0 {
             return Some(self.window.default);
         }
 
-        let idx = y * self.window.image.width + x;
+        let x: usize = x.try_into().unwrap();
+        let y: usize = y.try_into().unwrap();
+        if x >= self.window.image.width.try_into().unwrap() || y >= self.window.image.height.try_into().unwrap() {
+            return Some(self.window.default);
+        }
+
+        let idx: usize = y * self.window.image.width + x;
         Some(&self.window.image.data[idx])
     }
 }
@@ -156,6 +176,7 @@ mod tests {
     use super::*;
     extern crate test;
     use test::Bencher;
+    use std::iter::zip;
 
 /*
 IMAGE: 
@@ -190,13 +211,13 @@ ROI:
 
         let expected_vals = vec![33, 34, 35, 36, 43, 44, 45, 46, 53, 54, 55, 56, 63, 64, 65, 66];
         for (i, v) in window.into_iter().enumerate() {
-            println!("Value: {v}");
+            println!("value in window: {v}");
             assert_eq!(*v, expected_vals[i]);
         }
     }
 
     #[test]
-    fn out_of_bounds_returns_default() {
+    fn out_of_bounds_returns_default_x() {
         let data: Vec<u8> = (0..100).collect();
         let window = ImageBufferWindow::new(&data, 10, 10)
             .with_stride(1, 1)
@@ -206,9 +227,116 @@ ROI:
 
         let expected_vals = vec![255];
         for (i, v) in window.into_iter().enumerate() {
-            println!("Value: {v}");
+            println!("oob val x: {v}");
             assert_eq!(*v, expected_vals[i]);
         }
+    }
+
+    #[test]
+    fn out_of_bounds_returns_default_y() {
+        let data: Vec<u8> = (0..100).collect();
+        let window = ImageBufferWindow::new(&data, 10, 10)
+            .with_stride(1, 1)
+            .with_roi(0, 0, 10, 10)
+            .with_default(&255)
+            .build();
+
+        let expected_vals = vec![255];
+        for (i, v) in window.into_iter().enumerate() {
+            println!("oob val y: {v}");
+            assert_eq!(*v, expected_vals[i]);
+        }
+    }
+
+    #[test]
+    fn out_of_bounds_returns_default_neg_x() {
+        let data: Vec<u8> = (0..100).collect();
+        let window = ImageBufferWindow::new(&data, 10, 10)
+            .with_stride(1, 1)
+            .with_roi(-1, -1, 0, 0)
+            .with_default(&255)
+            .build();
+
+        let expected_vals = vec![255];
+        for (i, v) in window.into_iter().enumerate() {
+            println!("oob val -x: {v}");
+            assert_eq!(*v, expected_vals[i]);
+        }
+    }
+
+    #[test]
+    fn out_of_bounds_returns_default_neg_y() {
+        let data: Vec<u8> = (0..100).collect();
+        let window = ImageBufferWindow::new(&data, 10, 10)
+            .with_stride(1, 1)
+            .with_roi(0, 0, -1, -1)
+            .with_default(&255)
+            .build();
+
+        let expected_vals = vec![255];
+        for (i, v) in window.into_iter().enumerate() {
+            println!("oob val -y: {v}");
+            assert_eq!(*v, expected_vals[i]);
+        }
+    }
+
+    #[test]
+    fn convolve_with_many_iterators() {
+
+/*
+IMAGE: 
+
+00, 01, 02, 03, 04,
+05, 06, 07, 08, 09,
+10, 11, 12, 13, 14,
+15, 16, 17, 18, 19,
+20, 21, 22, 23, 24,
+
+*/
+
+        let data: Vec<u8> = (0..25).collect();
+        let shifts = vec![(-1,-1), (0,-1), (1, -1),
+                          (-1, 0), (0, 0), (1,  0),
+                          (-1, 1), (0, 1), (1,  1)];
+        let windows = shifts.iter().map(|(dx, dy)| {
+            ImageBufferWindow::new(&data, 5, 5)
+                .with_stride(1, 1)
+                .with_max_roi()
+                .shift_roi(*dx, *dy)
+                .with_default(&0)
+                .build()
+        });
+
+        let mut results = [0f32; 25];
+        let gaussian_3x3: Vec<i16> = vec![1, 2, 1,
+                                2, 4, 2,
+                                1, 2, 1];
+        let gaussian_3x3: Vec<f32> = gaussian_3x3.iter().map(|x| {
+            let normalized: f32 = (*x).try_into().unwrap();
+            normalized / 16f32
+        }).collect();
+
+        for window in windows {
+            for (i, (v, k)) in zip(window, gaussian_3x3.as_slice()).enumerate() {
+                let v: f32 = (*v).try_into().unwrap();
+                results[i] += v * k;
+            }
+        }
+
+        for v in results {
+            // print out even though it's in a test context:
+            println!("Convolved value: {v}");
+        }
+        // let expected_results = vec![00, 01, 02, 03, 04,
+        // 05, 06, 07, 08, 09,
+        // 10, 11, 12, 13, 14,
+        // 15, 16, 17, 18, 19,
+        // 20, 21, 22, 23, 24,
+        // ];
+
+        // for (i, (e, v)) in zip(expected_results, results).enumerate() {
+        //     assert_eq!(v, e);
+        // }
     }
 
     #[bench]
