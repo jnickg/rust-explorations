@@ -72,15 +72,12 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
     }
 
     pub fn shift_roi(mut self, dx: isize, dy: isize) -> Self {
-        self.roi = match self.roi {
-            Some(roi) => Some(RoiDescriptor {
-                x1: roi.x1 + dx,
-                x2: roi.x2 + dx,
-                y1: roi.y1 + dy,
-                y2: roi.y2 + dy,
-            }),
-            None => None,
-        };
+        self.roi = self.roi.map(|roi| RoiDescriptor {
+            x1: roi.x1 + dx,
+            x2: roi.x2 + dx,
+            y1: roi.y1 + dy,
+            y2: roi.y2 + dy,
+        });
         self
     }
 
@@ -149,7 +146,7 @@ impl<'a, T> Iterator for ImageBufferWindowIterator<'a, T>
 
         let x: usize = x.try_into().unwrap();
         let y: usize = y.try_into().unwrap();
-        if x >= self.window.image.width.try_into().unwrap() || y >= self.window.image.height.try_into().unwrap() {
+        if x >= self.window.image.width || y >= self.window.image.height {
             return Some(self.window.default);
         }
 
