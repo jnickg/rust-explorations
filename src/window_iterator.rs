@@ -1,4 +1,3 @@
-
 #[derive(Clone, Copy)]
 pub struct ImageDescriptor<'a, T> {
     data: &'a Vec<T>,
@@ -52,12 +51,7 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
     }
 
     pub fn with_roi(mut self, x1: isize, x2: isize, y1: isize, y2: isize) -> Self {
-        self.roi = Some(RoiDescriptor {
-            x1,
-            x2,
-            y1,
-            y2,
-        });
+        self.roi = Some(RoiDescriptor { x1, x2, y1, y2 });
         self
     }
 
@@ -89,7 +83,9 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
     pub fn build(self) -> ImageBufferWindow<'a, T> {
         let roi = self.roi.unwrap();
         let dist_from_x1_to_x2: usize = (roi.x2 - roi.x1).try_into().unwrap();
-        let total_els: usize = ((roi.y2 - roi.y1 + 1) * (roi.x2 - roi.x1 + 1)).try_into().unwrap();
+        let total_els: usize = ((roi.y2 - roi.y1 + 1) * (roi.x2 - roi.x1 + 1))
+            .try_into()
+            .unwrap();
         ImageBufferWindow {
             image: self.image,
             stride: self.stride.unwrap(),
@@ -97,7 +93,7 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
             default: self.default.unwrap(),
             dist_from_x1_to_x2,
             counter: 0,
-            total_els
+            total_els,
         }
     }
 }
@@ -123,7 +119,8 @@ pub struct ImageBufferWindowIterator<'a, T> {
 }
 
 impl<'a, T> Iterator for ImageBufferWindowIterator<'a, T>
-    where T: Copy
+where
+    T: Copy,
 {
     type Item = &'a T;
 
@@ -135,8 +132,14 @@ impl<'a, T> Iterator for ImageBufferWindowIterator<'a, T>
         let counter = self.window.counter;
         self.window.counter += 1;
 
-        let roi_x: isize = (counter % (self.window.dist_from_x1_to_x2 + 1) * self.window.stride.per_element).try_into().unwrap();
-        let roi_y: isize = (counter / (self.window.dist_from_x1_to_x2 + 1) * self.window.stride.per_row).try_into().unwrap();
+        let roi_x: isize = (counter % (self.window.dist_from_x1_to_x2 + 1)
+            * self.window.stride.per_element)
+            .try_into()
+            .unwrap();
+        let roi_y: isize = (counter / (self.window.dist_from_x1_to_x2 + 1)
+            * self.window.stride.per_row)
+            .try_into()
+            .unwrap();
 
         let x: isize = self.window.roi.x1 + roi_x;
         let y: isize = self.window.roi.y1 + roi_y;
@@ -156,15 +159,14 @@ impl<'a, T> Iterator for ImageBufferWindowIterator<'a, T>
 }
 
 impl<'a, T> IntoIterator for ImageBufferWindow<'a, T>
-    where T: Copy
+where
+    T: Copy,
 {
     type Item = &'a T;
     type IntoIter = ImageBufferWindowIterator<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        ImageBufferWindowIterator {
-            window: self,
-        }
+        ImageBufferWindowIterator { window: self }
     }
 }
 
@@ -172,30 +174,30 @@ impl<'a, T> IntoIterator for ImageBufferWindow<'a, T>
 mod tests {
     use super::*;
     extern crate test;
-    use test::Bencher;
     use std::iter::zip;
+    use test::Bencher;
 
-/*
-IMAGE: 
-    |  0   1   2   3   4   5   6   7   8   9
-    +---------------------------------------
-  0 | 00, 01, 02, 03, 04, 05, 06, 07, 08, 09
-  1 | 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
-  2 | 20, 21, 22, 23, 24, 25, 26, 27, 28, 29
-  3 | 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
-  4 | 40, 41, 42, 43, 44, 45, 46, 47, 48, 49
-  5 | 50, 51, 52, 53, 54, 55, 56, 57, 58, 59
-  6 | 60, 61, 62, 63, 64, 65, 66, 67, 68, 69
-  7 | 70, 71, 72, 73, 74, 75, 76, 77, 78, 79
-  8 | 80, 81, 82, 83, 84, 85, 86, 87, 88, 89
-  9 | 90, 91, 92, 93, 94, 95, 96, 97, 98, 99
+    /*
+    IMAGE:
+        |  0   1   2   3   4   5   6   7   8   9
+        +---------------------------------------
+      0 | 00, 01, 02, 03, 04, 05, 06, 07, 08, 09
+      1 | 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
+      2 | 20, 21, 22, 23, 24, 25, 26, 27, 28, 29
+      3 | 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
+      4 | 40, 41, 42, 43, 44, 45, 46, 47, 48, 49
+      5 | 50, 51, 52, 53, 54, 55, 56, 57, 58, 59
+      6 | 60, 61, 62, 63, 64, 65, 66, 67, 68, 69
+      7 | 70, 71, 72, 73, 74, 75, 76, 77, 78, 79
+      8 | 80, 81, 82, 83, 84, 85, 86, 87, 88, 89
+      9 | 90, 91, 92, 93, 94, 95, 96, 97, 98, 99
 
-ROI: 
-33, 34, 35, 36
-43, 44, 45, 46
-53, 54, 55, 56
-63, 64, 65, 66
-*/
+    ROI:
+    33, 34, 35, 36
+    43, 44, 45, 46
+    53, 54, 55, 56
+    63, 64, 65, 66
+    */
 
     #[test]
     fn iterate_over_window() {
@@ -206,7 +208,9 @@ ROI:
             .with_default(&0)
             .build();
 
-        let expected_vals = vec![33, 34, 35, 36, 43, 44, 45, 46, 53, 54, 55, 56, 63, 64, 65, 66];
+        let expected_vals = vec![
+            33, 34, 35, 36, 43, 44, 45, 46, 53, 54, 55, 56, 63, 64, 65, 66,
+        ];
         for (i, v) in window.into_iter().enumerate() {
             println!("value in window: {v}");
             assert_eq!(*v, expected_vals[i]);
@@ -279,22 +283,29 @@ ROI:
 
     #[test]
     fn convolve_with_many_iterators() {
+        /*
+        IMAGE:
 
-/*
-IMAGE: 
+        00, 01, 02, 03, 04,
+        05, 06, 07, 08, 09,
+        10, 11, 12, 13, 14,
+        15, 16, 17, 18, 19,
+        20, 21, 22, 23, 24,
 
-00, 01, 02, 03, 04,
-05, 06, 07, 08, 09,
-10, 11, 12, 13, 14,
-15, 16, 17, 18, 19,
-20, 21, 22, 23, 24,
-
-*/
+        */
 
         let data: Vec<u8> = (0..25).collect();
-        let shifts = vec![(-1,-1), (0,-1), (1, -1),
-                          (-1, 0), (0, 0), (1,  0),
-                          (-1, 1), (0, 1), (1,  1)];
+        let shifts = vec![
+            (-1, -1),
+            (0, -1),
+            (1, -1),
+            (-1, 0),
+            (0, 0),
+            (1, 0),
+            (-1, 1),
+            (0, 1),
+            (1, 1),
+        ];
         let windows = shifts.iter().map(|(dx, dy)| {
             ImageBufferWindow::new(&data, 5, 5)
                 .with_stride(1, 1)
@@ -305,13 +316,14 @@ IMAGE:
         });
 
         let mut results = [0f32; 25];
-        let gaussian_3x3: Vec<i16> = vec![1, 2, 1,
-                                2, 4, 2,
-                                1, 2, 1];
-        let gaussian_3x3: Vec<f32> = gaussian_3x3.iter().map(|x| {
-            let normalized: f32 = (*x).try_into().unwrap();
-            normalized / 16f32
-        }).collect();
+        let gaussian_3x3: Vec<i16> = vec![1, 2, 1, 2, 4, 2, 1, 2, 1];
+        let gaussian_3x3: Vec<f32> = gaussian_3x3
+            .iter()
+            .map(|x| {
+                let normalized: f32 = (*x).try_into().unwrap();
+                normalized / 16f32
+            })
+            .collect();
 
         for window in windows {
             for (i, (v, k)) in zip(window, gaussian_3x3.as_slice()).enumerate() {
@@ -352,5 +364,4 @@ IMAGE:
         };
         b.iter(bench_loop);
     }
-
 }
