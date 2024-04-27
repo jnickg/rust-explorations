@@ -208,9 +208,13 @@ mod tests {
             .with_default(&0)
             .build();
 
-        let expected_vals = vec![
-            33, 34, 35, 36, 43, 44, 45, 46, 53, 54, 55, 56, 63, 64, 65, 66,
-        ];
+        #[rustfmt::skip]
+        let expected_vals = { vec![
+            33, 34, 35, 36,
+            43, 44, 45, 46,
+            53, 54, 55, 56,
+            63, 64, 65, 66,
+        ] };
         for (i, v) in window.into_iter().enumerate() {
             println!("value in window: {v}");
             assert_eq!(*v, expected_vals[i]);
@@ -295,17 +299,13 @@ mod tests {
         */
 
         let data: Vec<u8> = (0..25).collect();
-        let shifts = vec![
-            (-1, -1),
-            (0, -1),
-            (1, -1),
-            (-1, 0),
-            (0, 0),
-            (1, 0),
-            (-1, 1),
-            (0, 1),
-            (1, 1),
-        ];
+
+        #[rustfmt::skip]
+        let shifts = { vec![
+            (-1, -1), (0, -1), (1, -1),
+            (-1,  0), (0,  0), (1,  0),
+            (-1,  1), (0,  1), (1,  1),
+        ] };
         let windows = shifts.iter().map(|(dx, dy)| {
             ImageBufferWindow::new(&data, 5, 5)
                 .with_stride(1, 1)
