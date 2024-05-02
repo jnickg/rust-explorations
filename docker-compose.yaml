@@ -1,0 +1,36 @@
+version: '3.7'
+
+services:
+    server:
+        build:
+            context: .
+        ports:
+            - 3000:3000
+        environment:
+            - MONGO_DB_NAME=tiler
+            - MONGO_HOST=mongodb
+            - MONGO_USER=postgres
+            - MONGO_PW_FILE=/run/secrets/mongo-pw
+        secrets:
+            - mongo-pw
+        depends_on:
+            - mongodb
+
+    mongodb:
+        image: mongo:latest
+        container_name: mongodb
+        restart: always
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: admin
+            MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo-pw
+            MONGO_INITDB_DATABASE: tiler
+        ports:
+            - 27017:27017
+        volumes:
+            - ./mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+        secrets:
+            - mongo-pw
+
+secrets:
+   mongo-pw:
+     file: ./secrets/mongo-pw.txt
