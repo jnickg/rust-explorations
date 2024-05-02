@@ -9,7 +9,7 @@ services:
         environment:
             - MONGO_DB_NAME=tiler
             - MONGO_HOST=mongodb
-            - MONGO_USER=postgres
+            - MONGO_USER=admin
             - MONGO_PW_FILE=/run/secrets/mongo-pw
         secrets:
             - mongo-pw

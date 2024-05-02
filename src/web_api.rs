@@ -1,5 +1,6 @@
 use axum::body::Body;
 use image::{io::Reader as ImageReader, DynamicImage, ImageFormat};
+use mongodb::bson::doc;
 use std::{collections::HashMap, io::Cursor};
 
 use askama::Template;
@@ -504,7 +505,29 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
     let result: Response = match ImageReader::with_format(Cursor::new(bytes), format).decode() {
         Ok(new_image) => {
             let app = &mut app_state.write().await;
-            app.images.insert(image_name.clone(), new_image);
+
+            match app.db {
+                Some(ref db) => {
+                    let images = db.collection("images");
+                    let doc = doc! {
+                        "name": image_name.clone(),
+                    };
+                    match images.insert_one(doc, None).await {
+                        Ok(_) => (),
+                        Err(e) => {
+                            debug_print!("Error: {}", e);
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "Failed to insert image into database.\n",
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+                None => {
+                    app.images.insert(image_name.clone(), new_image);
+                }
+            }
             (
                 StatusCode::CREATED,
                 format!("Image added with name {}.", image_name),

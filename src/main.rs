@@ -11,6 +11,8 @@ mod web_appstate;
 
 use std::sync::Arc;
 
+use clap::Parser;
+
 use tokio::sync::RwLock;
 
 use axum::{
@@ -21,6 +23,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
+
+use mongodb::Client;
 
 use tower_http::trace;
 extern crate tracing;
@@ -44,8 +48,55 @@ async fn handler_404() -> Response {
     (StatusCode::NOT_FOUND, "404 Not Found").into_response()
 }
 
+#[derive(Parser, Debug)]
+#[command(
+    version,
+    about,
+    long_about = "A tiling service written in rust. Breaks down images into bite-size tiles and serves them to application clients"
+)]
+struct Args {
+    /// Hostname of the MongoDB server
+    #[arg(long, value_name = "STR")]
+    host: String,
+
+    /// Username with which to log into the MongoDB
+    #[arg(long, value_name = "STR")]
+    user: String,
+
+    /// The path to a file containing the password for MongoDB
+    #[arg(long, value_name = "PATH")]
+    pass: String,
+
+    /// The port through which to access MongoDB
+    #[arg(long, value_name = "NUM")]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() {
+    let args = Args::parse();
+    dbg!(&args);
+
+    let mut state: RuntimeData = RuntimeData::new();
+
+    let password_str = std::fs::read_to_string(&args.pass).unwrap();
+    let uri = format!(
+        "mongodb://{}:{}@{}:{}/",
+        args.user,
+        password_str,
+        args.host,
+        args.port
+    );
+    let client = Client::with_uri_str(uri).await;
+    let database = match client {
+        Ok(c) => c.database("tiler"),
+        Err(e) => {
+            eprintln!("Error: {:?}", e);
+            return;
+        }
+    };
+    state.db = Some(database);
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -53,8 +104,6 @@ async fn main() {
     let trace_layer = trace::TraceLayer::new_for_http()
         .make_span_with(trace::DefaultMakeSpan::new().level(tracing::Level::INFO))
         .on_response(trace::DefaultOnResponse::new().level(tracing::Level::INFO));
-
-    let state: RuntimeData = RuntimeData::new();
 
     let api_routes = Router::new()
         .route("/hello", get(api::get_hello))
