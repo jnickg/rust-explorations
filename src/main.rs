@@ -82,10 +82,7 @@ async fn main() {
     let password_str = std::fs::read_to_string(&args.pass).unwrap();
     let uri = format!(
         "mongodb://{}:{}@{}:{}/",
-        args.user,
-        password_str,
-        args.host,
-        args.port
+        args.user, password_str, args.host, args.port
     );
     let client = Client::with_uri_str(uri).await;
     let database = match client {

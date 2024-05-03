@@ -170,10 +170,53 @@ where
     }
 }
 
+// pub fn convolve<'a, T, U: Element>(image: ImageDescriptor<'a, T> , kernel: DynMatrix<U>) -> DynMatrix<f32>
+// where
+//     T: Copy + Into<f32> + Default,
+//     U: Copy + Into<f32>,
+// {
+//     let mut result = DynMatrix::zeros(crate::dims::Dims(crate::dims::Rows(image.height), crate::dims::Cols(image.width)));
+//     let mut kernel_sum: f32 = 0.0;
+//     for row in kernel {
+//         for el in row.iter() {
+//             kernel_sum += (*el).into();
+//         }
+//     }
+
+//     let mut windows: Vec<ImageBufferWindow<T>> = Vec::new();
+//     for row in 0..kernel.rows() {
+//         for col in 0..kernel.cols() {
+//             let dx: isize = col.try_into().unwrap();
+//             let dy: isize = row.try_into().unwrap();
+//             let window = ImageBufferWindow::new(&image.data, image.width, image.height)
+//                 .with_stride(1, 1)
+//                 .with_max_roi()
+//                 .shift_roi(dx, dy)
+//                 .with_default(&T::default())
+//                 .build();
+//             windows.push(window);
+//         }
+//     }
+
+//     for (y, x) in result.iter_mut() {
+//         let mut sum: f32 = 0.0;
+//         for (w, k) in windows.iter().zip(kernel.iter()) {
+//             let w: f32 = (*w).into_iter().zip(k.iter()).fold(0.0, |acc, (w, k)| {
+//                 acc + (*w).into() * (*k).into()
+//             });
+//             sum += w;
+//         }
+//         *x = sum / kernel_sum;
+//     }
+
+//     result
+// }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     extern crate test;
+    use itertools::izip;
     use std::iter::zip;
     use test::Bencher;
 
@@ -306,46 +349,67 @@ mod tests {
             (-1,  0), (0,  0), (1,  0),
             (-1,  1), (0,  1), (1,  1),
         ] };
-        let windows = shifts.iter().map(|(dx, dy)| {
-            ImageBufferWindow::new(&data, 5, 5)
-                .with_stride(1, 1)
-                .with_max_roi()
-                .shift_roi(*dx, *dy)
-                .with_default(&0)
-                .build()
-        });
-
-        let mut results = [0f32; 25];
-        let gaussian_3x3: Vec<i16> = vec![1, 2, 1, 2, 4, 2, 1, 2, 1];
-        let gaussian_3x3: Vec<f32> = gaussian_3x3
+        let windows: Vec<ImageBufferWindow<u8>> = shifts
             .iter()
-            .map(|x| {
-                let normalized: f32 = (*x).try_into().unwrap();
-                normalized / 16f32
+            .map(|(dx, dy)| {
+                ImageBufferWindow::new(&data, 5, 5)
+                    .with_stride(1, 1)
+                    .with_max_roi()
+                    .shift_roi(*dx, *dy)
+                    .with_default(&0)
+                    .build()
             })
             .collect();
 
-        for window in windows {
-            for (i, (v, k)) in zip(window, gaussian_3x3.as_slice()).enumerate() {
-                let v: f32 = (*v).try_into().unwrap();
-                results[i] += v * k;
+        let mut results = [0f32; 25];
+        let box_3x3: Vec<i16> = vec![1, 1, 1, 1, 1, 1, 1, 1, 1];
+        let box_3x3: Vec<f32> = box_3x3
+            .iter()
+            .map(|x| {
+                let normalized: f32 = (*x).try_into().unwrap();
+                normalized / 9f32
+            })
+            .collect();
+
+        // Below we transpose `windows` so that, instead of a vector of iterable windows, we have
+        // an iterable collection where each element N is a tuple of all the "Nth" index of each of
+        // the windows
+        let transposed_windows = izip!(
+            windows[0].into_iter(),
+            windows[1].into_iter(),
+            windows[2].into_iter(),
+            windows[3].into_iter(),
+            windows[4].into_iter(),
+            windows[5].into_iter(),
+            windows[6].into_iter(),
+            windows[7].into_iter(),
+            windows[8].into_iter()
+        );
+
+        for (i, ws) in transposed_windows.enumerate() {
+            let mut sum: f32 = 0.0;
+            let neighborhood = &[
+                &ws.0, &ws.1, &ws.2, &ws.3, &ws.4, &ws.5, &ws.6, &ws.7, &ws.8,
+            ];
+            for (w, g) in zip(neighborhood.iter(), box_3x3.iter()) {
+                let w: f32 = (***w).try_into().unwrap();
+                sum += w * g;
             }
+            results[i] = sum;
         }
 
-        for v in results {
-            // print out even though it's in a test context:
-            println!("Convolved value: {v}");
-        }
-        // let expected_results = vec![00, 01, 02, 03, 04,
-        // 05, 06, 07, 08, 09,
-        // 10, 11, 12, 13, 14,
-        // 15, 16, 17, 18, 19,
-        // 20, 21, 22, 23, 24,
-        // ];
+        #[rustfmt::skip]
+        let expected_results: Vec<f32> = vec![
+             1.3333334,  2.3333335, 3.0,  3.6666667, 2.6666667,
+             3.666667,   6.0000005, 7.0,  8.0,       5.666667,
+             7.0,       11.000001, 12.0, 13.0,       9.0,
+            10.333333,  16.0,      17.0, 17.999998, 12.333334,
+             8.0,       12.333334, 13.0, 13.666667,  9.333334,
+        ];
 
-        // for (i, (e, v)) in zip(expected_results, results).enumerate() {
-        //     assert_eq!(v, e);
-        // }
+        for (e, v) in zip(expected_results, results) {
+            assert_eq!(v, e);
+        }
     }
 
     #[bench]
