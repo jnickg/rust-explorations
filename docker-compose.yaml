@@ -9,9 +9,10 @@ services:
         environment:
             - MONGO_DB_NAME=tiler
             - MONGO_HOST=mongodb
-            - MONGO_USER=admin
+            - MONGO_USER=/run/secrets/mongo-user
             - MONGO_PW_FILE=/run/secrets/mongo-pw
         secrets:
+            - mongo-user
             - mongo-pw
         depends_on:
             - mongodb
@@ -20,17 +21,19 @@ services:
         image: mongo:latest
         container_name: mongodb
         restart: always
-        environment:
-            MONGO_INITDB_ROOT_USERNAME: admin
-            MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo-pw
-            MONGO_INITDB_DATABASE: tiler
+        env_file:
+            - ./secrets/mongo-env.txt
         ports:
             - 27017:27017
         volumes:
             - ./mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+            - ./mongo/db:/data/db
         secrets:
+            - mongo-user
             - mongo-pw
 
 secrets:
-   mongo-pw:
-     file: ./secrets/mongo-pw.txt
+    mongo-pw:
+        file: ./secrets/mongo-pw.txt
+    mongo-user:
+        file: ./secrets/mongo-user.txt

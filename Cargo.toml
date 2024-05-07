@@ -16,6 +16,7 @@ askama_axum = "0.4.0"
 auto-impl-ops = "0.2.1"
 axum = "0.7.5"
 clap = { version = "4.5.4", features = ["derive"] }
+futures-util = "0.3.30"
 image = "0.25.1"
 itertools = "0.12.1"
 mongodb = "2.8.2"
