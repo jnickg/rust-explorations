@@ -2,7 +2,7 @@ use axum::body::Body;
 use image::{DynamicImage, ImageFormat};
 use mongodb::{bson::{doc, Document}, Collection};
 use std::{collections::HashMap, io::Cursor};
-use futures_util::{io::AsyncWriteExt, StreamExt};
+use futures_util::{io::AsyncWriteExt, StreamExt, AsyncReadExt};
 
 use askama::Template;
 use jnickg_imaging::{
@@ -534,6 +534,22 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
         "image": image_id,
         "mime_type": format.to_mime_type(),
     };
+    dbg!(&doc);
+
+    // Now that we have a handle to the uploaded ID and created a document, close out the
+    // upload to latch it.
+    match upload_stream.close().await {
+        Ok(_) => (),
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to close upload stream for image.\n",
+            )
+                .into_response();
+        }
+    }
+
     match images.insert_one(doc, None).await {
         Ok(_) => (),
         Err(e) => {
@@ -621,42 +637,92 @@ pub async fn get_image(
                 .into_response();
         }
     };
+    dbg!(&image_doc);
 
-    todo!("Get the id from image_doc, and download it");
-    // let bucket = db.gridfs_bucket(None);
+    let image_id = image_doc.get("image");
+    if image_id.is_none() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to find image id in database.\n",
+        )
+            .into_response();
+    }
+    let image_id = image_id.unwrap();
+    dbg!(&image_id);
 
-    // match app.images.get(name_without_ext) {
-    //     Some(image) => {
-    //         // If a header is specified, prefer to honor that over what might be in the request URL
-    //         let dest_format = match request.headers().get("Accept") {
-    //             Some(accept_hdr) => {
-    //                 let accept = accept_hdr.to_str().unwrap();
-    //                 match ImageFormat::from_mime_type(accept) {
-    //                     Some(fmt) => fmt,
-    //                     None => default_format,
-    //                 }
-    //             }
-    //             None => default_format,
-    //         };
-    //         let mut data = Vec::new();
-    //         let mut cursor = Cursor::new(&mut data);
-    //         match image.write_to(&mut cursor, dest_format) {
-    //             Ok(_) => Response::builder()
-    //                 .status(StatusCode::OK)
-    //                 .header("Content-Type", dest_format.to_mime_type())
-    //                 .body(Body::from(data))
-    //                 .unwrap(),
-    //             Err(_) => (
-    //                 StatusCode::INTERNAL_SERVER_ERROR,
-    //                 "Failed to write image data to response body.\n",
-    //             )
-    //                 .into_response(),
-    //         }
-    //     }
-    //     None => (
-    //         StatusCode::NOT_FOUND,
-    //         format!("Image {} not found.\n", name),
-    //     )
-    //         .into_response(),
-    // }
+    let mime_type = match image_doc.get("mime_type") {
+        Some(m) => m.as_str().unwrap(),
+        None => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to find image MIME type in database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    let bucket = db.gridfs_bucket(None);
+    let mut image_bytes = Vec::new();
+    let mut download_stream = match bucket.open_download_stream(image_id.clone()).await {
+        Ok(s) => s,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to open download stream for image.\n",
+            )
+                .into_response();
+        }
+    };
+
+    match download_stream.read_to_end(&mut image_bytes).await {
+        Ok(_) => (),
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read image data from database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    let image = match image::load_from_memory_with_format(&image_bytes, ImageFormat::from_mime_type(mime_type).unwrap()) {
+        Ok(img) => img,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to load image from memory.\n",
+            )
+                .into_response();
+        }
+    };
+
+    // If a header is specified, prefer to honor that over what might be in the request URL
+    let dest_format = match request.headers().get("Accept") {
+        Some(accept_hdr) => {
+            let accept = accept_hdr.to_str().unwrap();
+            match ImageFormat::from_mime_type(accept) {
+                Some(fmt) => fmt,
+                None => default_format,
+            }
+        }
+        None => default_format,
+    };
+
+    let mut data = Vec::new();
+    let mut cursor = Cursor::new(&mut data);
+    match image.write_to(&mut cursor, dest_format) {
+        Ok(_) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", dest_format.to_mime_type())
+            .body(Body::from(data))
+            .unwrap(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to write image data to response body.\n",
+        )
+            .into_response(),
+    }
 }
