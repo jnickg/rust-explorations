@@ -56,4 +56,4 @@ Open an [issue](https://github.com/jnickg/rust-explorations/issues) with a quest
 
 ## Credits
 
-* The glorious and infallable [`knock-knock`](https://github.com/pdx-cs-rust-web/knock-knock) repo was used as inspiration in terms of structure and crates used. Some code (especially middleware setup) may be similar.
+- The glorious and infallable [`knock-knock`](https://github.com/pdx-cs-rust-web/knock-knock) repo was used as inspiration in terms of structure and crates used. Some code (especially middleware setup) may be similar.
