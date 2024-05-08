@@ -1,8 +1,11 @@
 use axum::body::Body;
+use futures_util::{io::AsyncWriteExt, AsyncReadExt, StreamExt};
 use image::{DynamicImage, ImageFormat};
-use mongodb::{bson::{doc, Document}, Collection};
+use mongodb::{
+    bson::{doc, Document},
+    Collection,
+};
 use std::{collections::HashMap, io::Cursor};
-use futures_util::{io::AsyncWriteExt, StreamExt, AsyncReadExt};
 
 use askama::Template;
 use jnickg_imaging::{
@@ -80,11 +83,90 @@ impl<'a> IndexTemplate<'a> {
 
 pub async fn get_index(State(app_state): AppState) -> Response {
     let app = &mut app_state.read().await;
-    (
-        StatusCode::OK,
-        IndexTemplate::new(&app.matrices, &app.images),
-    )
-        .into_response()
+
+    // Get handle to gridfs
+    let db = app.db.as_ref().unwrap();
+    let bucket = db.gridfs_bucket(None);
+    let mut images = HashMap::<String, DynamicImage>::new();
+    let images_coll: Collection<Document> = db.collection("images");
+    let mut cursor = match images_coll.find(None, None).await {
+        Ok(c) => c,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to query image database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    // Extract `name`, `image` and `mime_type` fields from each document in images collection.
+    // Then, get the GridFS file from the ObjectId defined by `image` and decode it using the
+    // ImageFormat associated with the `mime_type`, and push the DynamicImage to `images` using
+    // `name` as the key
+    while let Some(doc) = cursor.next().await {
+        match doc {
+            Ok(d) => {
+                let name = d.get("name").unwrap().as_str().unwrap();
+                let image_id = d.get("image").unwrap();
+                let mime_type = d.get("mime_type").unwrap().as_str().unwrap();
+
+                let mut image_bytes = Vec::new();
+                let mut download_stream = match bucket.open_download_stream(image_id.clone()).await
+                {
+                    Ok(s) => s,
+                    Err(e) => {
+                        debug_print!("Error: {}", e);
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Failed to open download stream for image.\n",
+                        )
+                            .into_response();
+                    }
+                };
+
+                match download_stream.read_to_end(&mut image_bytes).await {
+                    Ok(_) => (),
+                    Err(e) => {
+                        debug_print!("Error: {}", e);
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Failed to read image data from database.\n",
+                        )
+                            .into_response();
+                    }
+                };
+
+                let image = match image::load_from_memory_with_format(
+                    &image_bytes,
+                    ImageFormat::from_mime_type(mime_type).unwrap(),
+                ) {
+                    Ok(img) => img,
+                    Err(e) => {
+                        debug_print!("Error: {}", e);
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Failed to load image from memory.\n",
+                        )
+                            .into_response();
+                    }
+                };
+
+                images.insert(name.to_string(), image);
+            }
+            Err(e) => {
+                debug_print!("Error: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to read image document.\n",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    (StatusCode::OK, IndexTemplate::new(&app.matrices, &images)).into_response()
 }
 
 pub async fn get_hello() -> Response {
@@ -602,9 +684,15 @@ pub async fn get_image(
     }
     let db = app.db.as_ref().unwrap();
     let images: Collection<Document> = db.collection("images");
-    let mut found = match images.find(doc!{
-        "name": name_without_ext
-    }, None).await {
+    let mut found = match images
+        .find(
+            doc! {
+                "name": name_without_ext
+            },
+            None,
+        )
+        .await
+    {
         Ok(cursor) => cursor,
         Err(e) => {
             debug_print!("Error: {}", e);
@@ -687,7 +775,10 @@ pub async fn get_image(
         }
     };
 
-    let image = match image::load_from_memory_with_format(&image_bytes, ImageFormat::from_mime_type(mime_type).unwrap()) {
+    let image = match image::load_from_memory_with_format(
+        &image_bytes,
+        ImageFormat::from_mime_type(mime_type).unwrap(),
+    ) {
         Ok(img) => img,
         Err(e) => {
             debug_print!("Error: {}", e);
@@ -725,4 +816,283 @@ pub async fn get_image(
         )
             .into_response(),
     }
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/image/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::CREATED, description = "No existing image found, so, image of the given name was added", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+        (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
+        (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
+    )
+)]
+pub async fn put_image(
+    State(app_state): AppState,
+    Path(image_name): Path<String>,
+    request: Request,
+) -> Response {
+    let content_type_hdr = request.headers().get("Content-Type");
+    if content_type_hdr.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Unable to handle request. Please pass an image body and specify content type.\n",
+        )
+            .into_response();
+    }
+
+    let mime_type = content_type_hdr.unwrap().to_str().unwrap();
+    let format: ImageFormat = match ImageFormat::from_mime_type(mime_type) {
+        Some(fmt) => fmt,
+        None => {
+            return (
+                StatusCode::NOT_ACCEPTABLE,
+                format!("The given MIME Type \"{}\" is not supported", mime_type),
+            )
+                .into_response()
+        }
+    };
+    debug_print!("Detected MIME Type: \"{}\"", mime_type);
+
+    let bytes = match Bytes::from_request(request, &app_state).await {
+        Ok(b) => b.to_vec(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read image data from request body.\n",
+            )
+                .into_response()
+        }
+    };
+    debug_print!("Extracted image data with byte length: {}", bytes.len());
+
+    let app = &mut app_state.write().await;
+
+    if app.db.is_none() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to acquire handle to image database.\n",
+        )
+            .into_response();
+    }
+    let db = app.db.as_ref().unwrap();
+
+    // Check if there is an existing document in the image collection with the given name. If there
+    // is, get the `image` ObjectId for the GridFS file. Delete both the document and the GridFS file
+
+    let image_collection: Collection<Document> = db.collection("images");
+    let existing_image = match image_collection
+        .find_one(
+            doc! {
+                "name": image_name.clone()
+            },
+            None,
+        )
+        .await
+    {
+        Ok(d) => d,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to query image database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    let mut deleted_old: bool = false;
+    if existing_image.is_some() {
+        deleted_old = true;
+        let existing_image = existing_image.unwrap();
+        let image_id = existing_image.get("image").unwrap();
+        let bucket = db.gridfs_bucket(None);
+        match bucket.delete(image_id.clone()).await {
+            Ok(_) => (),
+            Err(e) => {
+                debug_print!("Error: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to delete image from database.\n",
+                )
+                    .into_response();
+            }
+        }
+        match image_collection
+            .delete_one(
+                doc! {
+                    "name": image_name.clone()
+                },
+                None,
+            )
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => {
+                debug_print!("Error: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to delete image document from database.\n",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    // Now, write the image to GridFS and get the ID of the new upload
+    let bucket = db.gridfs_bucket(None);
+    let mut upload_stream = bucket.open_upload_stream(image_name.clone(), None);
+    let upload_result = upload_stream.write_all(&bytes).await;
+    match upload_result {
+        Ok(_) => (),
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to upload image to database.\n",
+            )
+                .into_response();
+        }
+    }
+
+    let image_id = upload_stream.id();
+    let images = db.collection("images");
+    let doc = doc! {
+        "name": image_name.clone(),
+        "image": image_id,
+        "mime_type": format.to_mime_type(),
+    };
+    dbg!(&doc);
+
+    // Now that we have a handle to the uploaded ID and created a document, close out the
+    // upload to latch it.
+    match upload_stream.close().await {
+        Ok(_) => (),
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to close upload stream for image.\n",
+            )
+                .into_response();
+        }
+    }
+
+    match images.insert_one(doc, None).await {
+        Ok(_) => (),
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to insert image into database.\n",
+            )
+                .into_response();
+        }
+    }
+
+    match deleted_old {
+        true => (
+            StatusCode::OK,
+            format!("Image {} updated.\n", image_name.clone()),
+        )
+            .into_response(),
+        false => (
+            StatusCode::CREATED,
+            format!("Image added with name {}.", image_name.clone()),
+        )
+            .into_response(),
+    }
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/image/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::NOT_FOUND, description = "No existing image found; could not delete.", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+    )
+)]
+pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<String>) -> Response {
+    let app = &mut app_state.write().await;
+    if app.db.is_none() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to acquire handle to image database.\n",
+        )
+            .into_response();
+    }
+    let db = app.db.as_ref().unwrap();
+    let images: Collection<Document> = db.collection("images");
+    let existing_image = match images
+        .find_one(
+            doc! {
+                "name": image_name.clone()
+            },
+            None,
+        )
+        .await
+    {
+        Ok(d) => d,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to query image database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    if existing_image.is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            format!("Image {} not found.\n", image_name),
+        )
+            .into_response();
+    }
+
+    let existing_image = existing_image.unwrap();
+    let image_id = existing_image.get("image").unwrap();
+    let bucket = db.gridfs_bucket(None);
+    match bucket.delete(image_id.clone()).await {
+        Ok(_) => (),
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to delete image from database.\n",
+            )
+                .into_response();
+        }
+    }
+    match images
+        .delete_one(
+            doc! {
+                "name": image_name.clone()
+            },
+            None,
+        )
+        .await
+    {
+        Ok(_) => (),
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to delete image document from database.\n",
+            )
+                .into_response();
+        }
+    }
+
+    (StatusCode::OK, format!("Image {} deleted.\n", image_name)).into_response()
 }

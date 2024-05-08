@@ -113,7 +113,12 @@ async fn main() {
                 .post(api::post_something_with_id),
         )
         .route("/image", post(api::post_image))
-        .route("/image/:name", get(api::get_image))
+        .route(
+            "/image/:name",
+            get(api::get_image)
+                .put(api::put_image)
+                .delete(api::delete_image),
+        )
         .route(
             "/matrix/:name",
             post(api::post_matrix_with_name)

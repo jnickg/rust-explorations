@@ -1,5 +1,4 @@
 use axum::extract::State;
-use image::DynamicImage;
 use jnickg_imaging::dyn_matrix::DynMatrix;
 use mongodb::Database;
 use std::collections::{HashMap, HashSet};
@@ -10,7 +9,6 @@ use tokio::sync::RwLock;
 pub struct RuntimeData {
     pub somethings: HashSet<u32>,
     pub matrices: HashMap<String, DynMatrix<f64>>,
-    pub images: HashMap<String, DynamicImage>,
     pub image_counter: usize,
     pub db: Option<Database>,
 }
@@ -20,7 +18,6 @@ impl RuntimeData {
         RuntimeData {
             somethings: HashSet::<u32>::new(),
             matrices: HashMap::<String, DynMatrix<f64>>::new(),
-            images: HashMap::<String, DynamicImage>::new(),
             image_counter: 0,
             db: None,
         }
