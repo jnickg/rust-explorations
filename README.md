@@ -36,6 +36,11 @@ docker compose up --build -d mongodb --force-recreate
 cargo run -- --host localhost --user myAdminUser --pass ./secrets/mongo-pw.txt --port 27017
 ```
 
+### Using
+
+- See the [`./examples`](./examples/) directory for some examples of interacting with the server, including `curl` commands
+- Navigate to [http://localhost:3000](http://localhost:3000) for a landing page, which includes lings to OpenAPI documentation and the like
+
 ### Cleaning
 
 Clean the MongoDB instance of all data
