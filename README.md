@@ -50,6 +50,25 @@ docker compose down mongodb
 sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions. This clears local files
 ```
 
+### Tasks
+
+- [x] Image support (CRUD)
+  - [x] Format conversion for all supported [`ImageFormat` mappings](https://docs.rs/image/latest/image/enum.ImageFormat.html#variants) (GET with `Content-Type` header and/or file extension in path)
+- [x] Matrix support (CRUD)
+- [x] Matrix Math REST interface (dot product, add, subtract)
+- [x] Image filtering/convolution with arbitrary kernel
+- [ ] Image Pyramid generation (box filter + strided subsampling)
+- [ ] Pyramid Tile generation ($\text{512}\times\text{512}$)
+- [ ] CLI tool for pyramid/tile generation
+- [x] Persistent DB backend (MongoDB)
+  - [x] integrate Image support (Doc + GridFS)
+  - [ ] integrate Matrix support (Doc)
+  - [ ] integrate Pyramid/tile support
+- [ ] Wasm support
+  - [ ] Headless backend
+  - [ ] In-browser frontend (Esmcripten OK)
+- [ ] User interface
+
 ## Support
 
 Open an [issue](https://github.com/jnickg/rust-explorations/issues) with a question or bug report, or feel free to open a [pull request](https://github.com/jnickg/rust-explorations/pulls).
