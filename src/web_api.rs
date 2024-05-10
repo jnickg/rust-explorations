@@ -5,12 +5,14 @@ use mongodb::{
     bson::{doc, Document},
     Collection,
 };
+use serde_json::json;
 use std::{collections::HashMap, io::Cursor};
 
 use askama::Template;
 use jnickg_imaging::{
     dims::{Dims, HasDims},
-    dyn_matrix::DynMatrix, ipr::{self, HasImageProcessingRoutines},
+    dyn_matrix::DynMatrix,
+    ipr::{self, HasImageProcessingRoutines},
 };
 use utoipa::OpenApi;
 
@@ -1260,16 +1262,27 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
         image_doc_ids.push(result.inserted_id);
     }
 
+    // Figure out the image URL for each of the image_name values
+    let image_urls = image_names
+        .iter()
+        .map(|name| format!("/api/v1/image/{}", name))
+        .collect::<Vec<String>>();
+
     // Now we generate the actual doc of the pyramid
     let pyramid_doc = doc! {
-        "name": format!("{}", pyramid_uuid),
+        "uuid": format!("{}", pyramid_uuid),
         "image_files": image_ids,
         "image_names": image_names,
         "image_docs": image_doc_ids,
+        "image_urls": image_urls,
         "mime_type": format.to_mime_type(),
     };
 
-    let result = match db.collection("pyramids").insert_one(pyramid_doc, None).await {
+    let result = match db
+        .collection("pyramids")
+        .insert_one(pyramid_doc, None)
+        .await
+    {
         Ok(r) => r,
         Err(e) => {
             debug_print!("Error: {}", e);
@@ -1283,7 +1296,79 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
 
     (
         StatusCode::CREATED,
-        format!("Pyramid added with Name {} (OjbectId {}).", pyramid_uuid, result.inserted_id),
+        format!(
+            "Pyramid added with uuid {} ({}).",
+            pyramid_uuid, result.inserted_id
+        ),
     )
         .into_response()
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/pyramid/{uuid}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Returned the image pyramid info with of the given uuid", body = Json),
+        (status = StatusCode::NOT_FOUND, description = "No such image pyramid available", body = ()),
+    )
+)]
+pub async fn get_pyramid(State(app_state): AppState, Path(uuid): Path<String>) -> Response {
+    let app = &mut app_state.read().await;
+    if app.db.is_none() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to acquire handle to image database.\n",
+        )
+            .into_response();
+    }
+    let db = app.db.as_ref().unwrap();
+    let pyramids: Collection<Document> = db.collection("pyramids");
+    let pyramid = match pyramids
+        .find_one(
+            doc! {
+                "uuid": uuid.clone()
+            },
+            None,
+        )
+        .await
+    {
+        Ok(d) => d,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to query image database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    if pyramid.is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            format!("Pyramid {} not found.\n", uuid),
+        )
+            .into_response();
+    }
+
+    let pyramid = pyramid.unwrap();
+    let image_urls = pyramid.get("image_urls").unwrap().as_array().unwrap();
+    let image_urls = image_urls
+        .iter()
+        .map(|u| u.as_str().unwrap())
+        .collect::<Vec<&str>>();
+
+    let json = json!({
+        "uuid": uuid,
+        "image_urls": image_urls,
+    });
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(json.to_string()))
+        .unwrap()
 }
