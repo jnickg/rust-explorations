@@ -10,7 +10,7 @@ use std::{collections::HashMap, io::Cursor};
 use askama::Template;
 use jnickg_imaging::{
     dims::{Dims, HasDims},
-    dyn_matrix::DynMatrix,
+    dyn_matrix::DynMatrix, ipr::{self, HasImageProcessingRoutines},
 };
 use utoipa::OpenApi;
 
@@ -1095,4 +1095,195 @@ pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<Str
     }
 
     (StatusCode::OK, format!("Image {} deleted.\n", image_name)).into_response()
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/pyramid",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::CREATED, description = "Added the image with the returned ID", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+        (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
+        (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ())
+    )
+)]
+pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Response {
+    let content_type_hdr = request.headers().get("Content-Type");
+    if content_type_hdr.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Unable to handle request. Please pass an image body and specify a Content-Type.\n",
+        )
+            .into_response();
+    }
+
+    let mime_type = content_type_hdr.unwrap().to_str().unwrap();
+    let format: ImageFormat = match ImageFormat::from_mime_type(mime_type) {
+        Some(fmt) => fmt,
+        None => {
+            return (
+                StatusCode::NOT_ACCEPTABLE,
+                format!("The given MIME Type \"{}\" is not supported", mime_type),
+            )
+                .into_response()
+        }
+    };
+    debug_print!("Detected MIME Type: \"{}\"", mime_type);
+
+    let bytes = match Bytes::from_request(request, &app_state).await {
+        Ok(b) => b.to_vec(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to read image data from request body.\n",
+            )
+                .into_response()
+        }
+    };
+    debug_print!("Extracted image data with byte length: {}", bytes.len());
+
+    // Decode image using provided information
+    let image = match image::load_from_memory_with_format(&bytes, format) {
+        Ok(img) => img,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to load image from memory.\n",
+            )
+                .into_response();
+        }
+    };
+
+    // Generate image pyramid
+    let ipr = ipr::IprImage(image);
+
+    let pyramid = match ipr.generate_image_pyramid() {
+        Ok(p) => p,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to generate image pyramid.\n",
+            )
+                .into_response();
+        }
+    };
+
+    let app = &mut app_state.write().await;
+
+    if app.db.is_none() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to acquire handle to image database.\n",
+        )
+            .into_response();
+    }
+    let db = app.db.as_ref().unwrap();
+
+    // Write image pyramid levels to gridFS and aggregate the IDs
+    let bucket = db.gridfs_bucket(None);
+    let mut image_ids = Vec::new();
+    for (i, img) in pyramid.iter().enumerate() {
+        let mut data = Vec::new();
+        let mut cursor = Cursor::new(&mut data);
+        match img.write_to(&mut cursor, format) {
+            Ok(_) => (),
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to process image pyramid.\n",
+                )
+                    .into_response();
+            }
+        }
+
+        let mut upload_stream = bucket.open_upload_stream(format!("pyramid_{}", i), None);
+        match upload_stream.write_all(&data).await {
+            Ok(_) => (),
+            Err(e) => {
+                debug_print!("Error: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to upload image to database.\n",
+                )
+                    .into_response();
+            }
+        }
+
+        let image_id = upload_stream.id();
+        image_ids.push(image_id.clone());
+
+        match upload_stream.close().await {
+            Ok(_) => (),
+            Err(e) => {
+                debug_print!("Error: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to close upload stream for image.\n",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let pyramid_uuid = uuid::Uuid::new_v4();
+
+    // For each image_id in the pyramid, generate a regular /api/v1/image/{name} resource, where
+    // {name} is a UUID
+    let mut image_names = Vec::new();
+    let mut image_doc_ids = Vec::new();
+    for (i, image_id) in image_ids.iter().enumerate() {
+        let image_name = format!("{}_L{}", pyramid_uuid, i);
+        image_names.push(image_name.clone());
+        let doc = doc! {
+            "name": image_name.clone(),
+            "image": image_id,
+            "mime_type": format.to_mime_type(),
+        };
+        dbg!(&doc);
+
+        let result = match db.collection("images").insert_one(doc, None).await {
+            Ok(r) => r,
+            Err(e) => {
+                debug_print!("Error: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to insert image into database.\n",
+                )
+                    .into_response();
+            }
+        };
+        image_doc_ids.push(result.inserted_id);
+    }
+
+    // Now we generate the actual doc of the pyramid
+    let pyramid_doc = doc! {
+        "name": format!("{}", pyramid_uuid),
+        "image_files": image_ids,
+        "image_names": image_names,
+        "image_docs": image_doc_ids,
+        "mime_type": format.to_mime_type(),
+    };
+
+    let result = match db.collection("pyramids").insert_one(pyramid_doc, None).await {
+        Ok(r) => r,
+        Err(e) => {
+            debug_print!("Error: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to insert pyramid into database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    (
+        StatusCode::CREATED,
+        format!("Pyramid added with Name {} (OjbectId {}).", pyramid_uuid, result.inserted_id),
+    )
+        .into_response()
 }

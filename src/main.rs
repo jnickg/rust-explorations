@@ -135,7 +135,8 @@ async fn main() {
         .route(
             "/matrix/subtract/:name1/:name2",
             post(api::post_matrix_subtract),
-        );
+        )
+        .route("/pyramid", post(api::post_pyramid));
 
     let swagger_ui =
         SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api::Documentation::openapi());

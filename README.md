@@ -57,13 +57,14 @@ sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions
 - [x] Matrix support (CRUD)
 - [x] Matrix Math REST interface (dot product, add, subtract)
 - [x] Image filtering/convolution with arbitrary kernel
-- [ ] Image Pyramid generation (box filter + strided subsampling)
+- [x] Image Pyramid generation (Gaussian filter + strided subsampling)
 - [ ] Pyramid Tile generation ($\text{512}\times\text{512}$)
 - [ ] CLI tool for pyramid/tile generation
 - [x] Persistent DB backend (MongoDB)
   - [x] integrate Image support (Doc + GridFS)
   - [ ] integrate Matrix support (Doc)
-  - [ ] integrate Pyramid/tile support
+  - [x] integrate Pyramid support (Doc + Images)
+  - [ ] integrate Tile support (Doc + Images)
 - [ ] Wasm support
   - [ ] Headless backend
   - [ ] In-browser frontend (Esmcripten OK)
