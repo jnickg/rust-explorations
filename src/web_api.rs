@@ -5,7 +5,6 @@ use mongodb::{
     bson::{doc, Document},
     Collection,
 };
-use serde_json::json;
 use std::{collections::HashMap, io::Cursor};
 
 use askama::Template;
@@ -1100,13 +1099,13 @@ pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<Str
 }
 
 #[utoipa::path(
-    delete,
+    post,
     path = "/api/v1/pyramid",
     request_body(
         content = Bytes,
     ),
     responses(
-        (status = StatusCode::CREATED, description = "Added the image with the returned ID", body = ()),
+        (status = StatusCode::CREATED, description = "Added the image with the returned ID", body = Json),
         (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
         (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
         (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ())
@@ -1271,6 +1270,7 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
     // Now we generate the actual doc of the pyramid
     let pyramid_doc = doc! {
         "uuid": format!("{}", pyramid_uuid),
+        "url": format!("/api/v1/pyramid/{}", pyramid_uuid),
         "image_files": image_ids,
         "image_names": image_names,
         "image_docs": image_doc_ids,
@@ -1278,7 +1278,18 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
         "mime_type": format.to_mime_type(),
     };
 
-    let result = match db
+    let doc_json = match serde_json::to_string(&pyramid_doc) {
+        Ok(j) => j,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to serialize pyramid document.\n",
+            )
+                .into_response();
+        }
+    };
+
+    match db
         .collection("pyramids")
         .insert_one(pyramid_doc, None)
         .await
@@ -1294,14 +1305,11 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
         }
     };
 
-    (
-        StatusCode::CREATED,
-        format!(
-            "Pyramid added with uuid {} ({}).",
-            pyramid_uuid, result.inserted_id
-        ),
-    )
-        .into_response()
+    Response::builder()
+        .status(StatusCode::CREATED)
+        .header("Content-Type", "application/json")
+        .body(Body::from(doc_json.to_string()))
+        .unwrap()
 }
 
 #[utoipa::path(
@@ -1355,16 +1363,16 @@ pub async fn get_pyramid(State(app_state): AppState, Path(uuid): Path<String>) -
     }
 
     let pyramid = pyramid.unwrap();
-    let image_urls = pyramid.get("image_urls").unwrap().as_array().unwrap();
-    let image_urls = image_urls
-        .iter()
-        .map(|u| u.as_str().unwrap())
-        .collect::<Vec<&str>>();
-
-    let json = json!({
-        "uuid": uuid,
-        "image_urls": image_urls,
-    });
+    let json = match serde_json::to_string(&pyramid) {
+        Ok(j) => j,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to serialize pyramid document.\n",
+            )
+                .into_response();
+        }
+    };
 
     Response::builder()
         .status(StatusCode::OK)

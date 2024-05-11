@@ -60,6 +60,7 @@ sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions
 - [x] Image Pyramid generation (Gaussian filter + strided subsampling)
 - [ ] Pyramid Tile generation ($\text{512}\times\text{512}$)
 - [ ] CLI tool for pyramid/tile generation
+- [ ] Brotli compression of tiled image pyramid
 - [x] Persistent DB backend (MongoDB)
   - [x] integrate Image support (Doc + GridFS)
   - [ ] integrate Matrix support (Doc)
@@ -68,6 +69,7 @@ sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions
 - [ ] Wasm support
   - [ ] Headless backend
   - [ ] In-browser frontend (Esmcripten OK)
+- [ ] Websocket support for long-running tasks
 - [ ] User interface
 
 ## Support
