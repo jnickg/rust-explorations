@@ -1,6 +1,8 @@
 use axum::extract::State;
 use jnickg_imaging::dyn_matrix::DynMatrix;
 use mongodb::Database;
+use tokio::task::JoinHandle;
+use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -11,6 +13,7 @@ pub struct RuntimeData {
     pub matrices: HashMap<String, DynMatrix<f64>>,
     pub image_counter: usize,
     pub db: Option<Database>,
+    pub bg_tasks: HashMap<Uuid, Arc<JoinHandle<()>>>
 }
 
 impl RuntimeData {
@@ -20,6 +23,7 @@ impl RuntimeData {
             matrices: HashMap::<String, DynMatrix<f64>>::new(),
             image_counter: 0,
             db: None,
+            bg_tasks: HashMap::<Uuid, Arc<JoinHandle<()>>>::new()
         }
     }
 }

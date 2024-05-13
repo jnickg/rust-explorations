@@ -4,6 +4,7 @@
 
 mod web_api;
 mod web_appstate;
+mod web_routines;
 
 //
 // Uses
