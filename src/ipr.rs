@@ -5,7 +5,7 @@ use image::{DynamicImage, GenericImageView, ImageFormat};
 use crate::dims::{Cols, Dims, HasDims, Rows};
 use crate::dyn_matrix::DynMatrix;
 
-pub struct IprImage(pub DynamicImage);
+pub struct IprImage<'a>(pub &'a DynamicImage);
 
 pub struct ImageTiles {
     pub tiles: Vec<DynamicImage>,
@@ -27,7 +27,7 @@ pub trait HasImageProcessingRoutines {
     ) -> Result<Vec<u8>, &'static str>;
 }
 
-impl HasImageProcessingRoutines for IprImage {
+impl<'a> HasImageProcessingRoutines for IprImage<'a> {
     fn convolve_in_place(&mut self, k: DynMatrix<f64>) -> Result<(), &'static str> {
         let Dims(Rows(r), Cols(c)) = k.dims();
         if r != c {

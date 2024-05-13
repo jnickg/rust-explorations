@@ -5,7 +5,7 @@ use mongodb::{
     bson::{doc, Document},
     Collection,
 };
-use std::{collections::HashMap, io::Cursor};
+use std::{collections::HashMap, io::Cursor, task::Poll};
 
 use askama::Template;
 use jnickg_imaging::{
@@ -1160,7 +1160,7 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
     };
 
     // Generate image pyramid
-    let ipr = ipr::IprImage(image);
+    let ipr = ipr::IprImage(&image);
 
     let pyramid = match ipr.generate_image_pyramid() {
         Ok(p) => p,
@@ -1308,17 +1308,25 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
 
     // We have an image pyramid document, now kick off a new background task that takes the pyramid
     // and:
-    //  0. Updates the pyramid doc such that "tiles" field is now "pending" and releases doc lock
+    //  0. Updates the pyramid doc such that "tiles" field is now "processing" and releases doc lock
     //  1. Breaks each image into tiles of 512x512 pixels
     //  2. Encodes the tile as a PNG and Brotli compresses the PNG data
     //  3. Updates the pyramid doc such that "tiles" field is now "done", when ALL tiles are done
     //  4. Updates the pyramid doc such that "tiles" field is now "failed" if any tile fails
     let pyramid_uuid_to_move = pyramid_uuid.clone();
     let app_state_to_move = app_state.clone();
-    let bg_task = tokio::task::spawn_blocking(move ||  {
+    let bg_task = tokio::task::spawn_blocking(move || {
         let pyramid_uuid = pyramid_uuid_to_move;
         let app_state = app_state_to_move;
-        web_routines::generate_tiles_for_pyramid(State(app_state), pyramid_uuid);
+        let future = web_routines::generate_tiles_for_pyramid(State(app_state), pyramid_uuid);
+        // Wait for the future to resovle without making this closure async (read: software herpes)
+        // loop {
+        //     if let Poll::Ready(_) = future.poll() {
+        //         break;
+        //     }
+        //     std::thread::sleep(time::duration::from_millis)
+        // }
+
     });
 
     // Push bg_task join handle to app state
