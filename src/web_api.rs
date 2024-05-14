@@ -1326,7 +1326,6 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
         //     }
         //     std::thread::sleep(time::duration::from_millis)
         // }
-
     });
 
     // Push bg_task join handle to app state

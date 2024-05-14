@@ -8,6 +8,8 @@ use crate::dyn_matrix::DynMatrix;
 pub struct IprImage<'a>(pub &'a DynamicImage);
 
 pub struct ImageTiles {
+    pub original_width: u32,
+    pub original_height: u32,
     pub tiles: Vec<DynamicImage>,
     pub tile_width: u32,
     pub tile_height: u32,
@@ -93,6 +95,8 @@ impl<'a> HasImageProcessingRoutines for IprImage<'a> {
             .collect();
 
         Ok(ImageTiles {
+            original_height: i.height(),
+            original_width: i.width(),
             tiles,
             tile_width,
             tile_height,
