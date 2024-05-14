@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use futures::AsyncWriteExt;
 use futures_util::AsyncReadExt;
 use image::{DynamicImage, ImageFormat};
@@ -86,13 +88,14 @@ pub async fn generate_tiles_for_pyramid(
     // then use Rayon to process each tile separately to encode/compress. Then we collect them into
     // a 3D array where the first dimension is the pyramid level, the second dimension is the list
     // of tiles, and the third is the bytes for that given tile
-    let pyramid_level_tiles = Vec::new();
+    let pyramid_level_tiles = Vec::with_capacity(pyramid_images.len());
+    let locking_pyramid_level_tiles = Mutex::new(pyramid_level_tiles);
     let compressed_level_tiles: Vec<Vec<Vec<u8>>> = pyramid_images
         .par_iter()
-        .map(|i: &DynamicImage| -> Vec<Vec<u8>> {
+        .enumerate()
+        .map(|(idx, i) : (usize, &DynamicImage)| -> Vec<Vec<u8>> {
             let image = IprImage(i);
             let tiles = image.make_tiles(512, 512).unwrap();
-            pyramid_level_tiles.push(tiles);
             let compressed_tiles: Vec<Vec<u8>> = tiles
                 .tiles
                 .par_iter()
@@ -101,68 +104,71 @@ pub async fn generate_tiles_for_pyramid(
                     tile.compress_brotli(10, 24, Some(dest_format)).unwrap()
                 })
                 .collect();
+            let mut plt = locking_pyramid_level_tiles.lock().unwrap();
+            plt.insert(idx, tiles);
             compressed_tiles
         })
         .collect();
+
+    // We don't need the mutex any more, to slurp the vec back out
+    let pyramid_level_tiles = locking_pyramid_level_tiles.lock().unwrap();
 
     // For each Pyramid level & tile, we write that object to GridFS and return a doc describing
     // the tile (x/y loc, w/h, index. In the outer layer, aggregate all Bson::Documents into a
     // single array doc containing all the tile docs for that pyramid level, as well as some
     // metadata about that pyramid level (index, w/h)
-    let db = &mut app_state.write().await.db.as_ref().unwrap();
+    let app = &mut app_state.write().await;
+    let db = app.db.as_ref().unwrap();
     let bucket = db.gridfs_bucket(GridFsBucketOptions::builder().bucket_name("tiles".to_string()).build());
-    let results: Vec<Result<Document, &'static str>> = compressed_level_tiles
-        .iter()
-        .enumerate()
-        .map(
-            |(pyramid_level, level_tiles): (usize, &Vec<Vec<u8>>)| -> Result<Document, &'static str> {
-                let inner_results: Vec<Result<Document, &'static str>> = level_tiles
-                    .iter()
-                    .enumerate()
-                    .map(
-                        |(t_idx, tile): (usize, &Vec<u8>)| -> Result<Document, &'static str> {
-                            let mut upload_stream = bucket.open_upload_stream("tile.data", None);
-                            match upload_stream.write_all(&tile).await {
-                                Ok(_) => (),
-                                Err(_) => return Err("Error writing tile to GridFS"),
-                            }
-                            let tile_obj_id = upload_stream.id();
-                            let level_tiles = pyramid_level_tiles[pyramid_level];
-                            let tile_image = level_tiles.tiles[t_idx];
-                            // Based on tile size, original dimensions, and tile index, determine our x/y;
-                            let t_idx: u32 = t_idx.try_into().unwrap();
-                            let x = (t_idx % level_tiles.count_across) * level_tiles.tile_width;
-                            let y = (t_idx / level_tiles.count_across) * level_tiles.tile_height;
-                            
-                            Ok(doc!{
-                                "x": x,
-                                "y": y,
-                                "width": tile_image.width(),
-                                "height": tile_image.height(),
-                                "index": t_idx,
-                                "tile_id": tile_obj_id.to_string()
-                            })
-                        },
-                    )
-                    .collect();
+    let mut level_docs = Vec::new();
+    for (pyramid_level, level_tiles) in compressed_level_tiles.iter().enumerate() {
+        let mut tile_docs = Vec::new();
+        for (t_idx, tile) in level_tiles.iter().enumerate() {
+            let mut upload_stream = bucket.open_upload_stream("tile.data", None);
+            match upload_stream.write_all(&tile).await {
+                Ok(_) => (),
+                Err(_) => return Err("Error writing tile to GridFS"),
+            }
+            let tile_obj_id = upload_stream.id();
+            let level_tiles = &pyramid_level_tiles[pyramid_level];
+            let tile_image = &level_tiles.tiles[t_idx];
 
-                let inner_results: Result<Vec<Document>, &'static str> = inner_results.into_iter().collect();
-                let inner_results = inner_results?;
+            // Based on tile size, original dimensions, and tile index, determine our x/y;
+            let t_idx: u32 = t_idx.try_into().unwrap();
+            let x = (t_idx % level_tiles.count_across) * level_tiles.tile_width;
+            let y = (t_idx / level_tiles.count_across) * level_tiles.tile_height;
 
-                // Now that we have all the tile docs for this pyramid level, we need to add some
-                // metadata about the pyramid level itself
-                let pyramid_level_u32: u32 = pyramid_level.try_into().unwrap(); // How annoying
-                let pyramid_level_doc = doc!{
-                    "index": pyramid_level_u32,
-                    "width": pyramid_images[pyramid_level].width(),
-                    "height": pyramid_images[pyramid_level].height(),
-                    "tiles": inner_results
-                };
+            tile_docs.push(doc!{
+                "x": x,
+                "y": y,
+                "width": tile_image.width(),
+                "height": tile_image.height(),
+                "index": t_idx,
+                "tile_id": tile_obj_id.to_string()
+            });
+        }
+        // Now that we have all the tile docs for this pyramid level, we need to add some
+        // metadata about the pyramid level itself
+        let pyramid_level_u32: u32 = pyramid_level.try_into().unwrap(); // How annoying
+        level_docs.push(doc!{
+            "index": pyramid_level_u32,
+            "width": pyramid_images[pyramid_level].width(),
+            "height": pyramid_images[pyramid_level].height(),
+            "tiles": tile_docs
+        });
+    }
 
-                Ok(pyramid_level_doc)
-            },
+    let pyramids_collection: Collection<Document> = db.collection("pyramids");
+    // Update document so "tiles" field contains all the tiles
+    match pyramids_collection
+        .update_one(
+            doc! { "uuid": pyramid_uuid.to_string() },
+            doc! { "$set": { "tiles": level_docs } },
+            None,
         )
-        .collect();
-
-    todo!();
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(_) => return Err("Error updating pyramid"),
+    }
 }
