@@ -1313,15 +1313,16 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
     //  2. Encodes the tile as a PNG and Brotli compresses the PNG data
     //  3. Updates the pyramid doc such that "tiles" field is now "done", when ALL tiles are done
     //  4. Updates the pyramid doc such that "tiles" field is now "failed" if any tile fails
-    let pyramid_uuid_to_move = pyramid_uuid.clone();
+    let pyramid_uuid_to_move = pyramid_uuid;
     let app_state_to_move = app_state.clone();
-    let work = async move {
-        web_routines::generate_tiles_for_pyramid(State(app_state_to_move), pyramid_uuid_to_move).await.unwrap();
+    let work = move || {
+        web_routines::generate_tiles_for_pyramid(State(app_state_to_move), pyramid_uuid_to_move)
+            .unwrap();
     };
-    tokio::spawn(work);
+    let bg_task = tokio::task::spawn_blocking(work);
 
-    // Push bg_task join handle to app state
-    // app.bg_tasks.insert(pyramid_uuid.clone(), Arc::new(bg_task));
+    // Push bg_task join handle to app state... just in case.
+    app.bg_tasks.insert(pyramid_uuid, Arc::new(bg_task));
 
     // Everything is set, now let's let the user know the pyramid is created!
     Response::builder()
