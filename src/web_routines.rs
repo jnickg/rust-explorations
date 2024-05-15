@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use futures::{executor::block_on, future::join_all, AsyncWriteExt};
+use futures::{executor::block_on, AsyncWriteExt};
 use futures_util::AsyncReadExt;
 use image::{DynamicImage, ImageFormat};
 use mongodb::{
@@ -28,7 +28,7 @@ pub fn generate_tiles_for_pyramid(
     app_state: AppState,
     pyramid_uuid: Uuid,
 ) -> Result<(), &'static str> {
-    let (dest_format, pyramid_images): (ImageFormat, Vec<DynamicImage>) = {
+    let (dest_format, pyramid_images): (ImageFormat, Vec<Arc<DynamicImage>>) = {
         let app = &mut app_state.blocking_read();
         let db = app.db.as_ref().ok_or("Database not connected")?;
         let pyramids_collection: Collection<Document> = db.collection("pyramids");
@@ -65,20 +65,27 @@ pub fn generate_tiles_for_pyramid(
 
         let bucket = db.gridfs_bucket(None);
 
-        let pyramid_images = block_on(join_all(image_ids.iter().map(|id| async {
-            let mut image_bytes = Vec::new();
-            let mut image_stream = bucket.open_download_stream(id.clone()).await.unwrap();
-            match image_stream.read_to_end(&mut image_bytes).await {
-                Ok(_) => (),
-                Err(_) => {
-                    todo!();
-                }
-            };
-            image::load_from_memory_with_format(&image_bytes, dest_format).unwrap()
-        })));
+        let pyramid_images = image_ids
+            .iter()
+            .map(|id| {
+                let mut image_bytes = Vec::new();
+                let mut image_stream = block_on(bucket.open_download_stream(id.clone())).unwrap();
+                match block_on(image_stream.read_to_end(&mut image_bytes)) {
+                    Ok(_) => (),
+                    Err(_) => {
+                        todo!();
+                    }
+                };
+                Arc::new(image::load_from_memory_with_format(&image_bytes, dest_format).unwrap())
+            })
+            .collect();
 
         (dest_format, pyramid_images)
     };
+
+    for i in &pyramid_images {
+        dbg!((i.color(), i.width(), i.height()));
+    }
 
     // Now that we've grabbed all the images in the pyramid and updated the doc, actually create
     // the tiles for each pyramid level, then encode them to the destination format and brotli
@@ -86,24 +93,27 @@ pub fn generate_tiles_for_pyramid(
     // then use Rayon to process each tile separately to encode/compress. Then we collect them into
     // a 3D array where the first dimension is the pyramid level, the second dimension is the list
     // of tiles, and the third is the bytes for that given tile
-    let pyramid_level_tiles = vec![ImageTiles::default(); pyramid_images.len()];
-    let locking_pyramid_level_tiles = Mutex::new(pyramid_level_tiles);
+    let pyramid_level_tiles = vec![Arc::<ImageTiles>::default(); pyramid_images.len()];
+    let locking_pyramid_level_tiles = Arc::new(Mutex::new(pyramid_level_tiles));
     let compressed_level_tiles: Vec<Vec<Vec<u8>>> = pyramid_images
         .par_iter()
         .enumerate()
-        .map(|(idx, i): (usize, &DynamicImage)| -> Vec<Vec<u8>> {
+        .map(|(idx, i): (usize, &Arc<DynamicImage>)| -> Vec<Vec<u8>> {
             let image = IprImage(i);
             let tiles = image.make_tiles(512, 512).unwrap();
+            dbg!((idx, tiles.tiles.len()));
             let compressed_tiles: Vec<Vec<u8>> = tiles
                 .tiles
                 .par_iter()
-                .map(|t: &DynamicImage| -> Vec<u8> {
+                .enumerate()
+                .map(|(t_idx, t): (usize, &DynamicImage)| -> Vec<u8> {
+                    dbg!((t_idx, t.color(), t.width(), t.height()));
                     let tile = IprImage(t);
                     tile.compress_brotli(10, 24, Some(dest_format)).unwrap()
                 })
                 .collect();
-            let mut plt = locking_pyramid_level_tiles.lock().unwrap();
-            plt[idx] = tiles;
+            let plt = &mut locking_pyramid_level_tiles.lock().unwrap();
+            plt[idx] = Arc::new(tiles);
             compressed_tiles
         })
         .collect();
@@ -123,11 +133,13 @@ pub fn generate_tiles_for_pyramid(
             .bucket_name("tiles".to_string())
             .build(),
     );
+    let dest_fmt_ext = dest_format.extensions_str();
     let mut level_docs = Vec::new();
     for (pyramid_level, level_tiles) in compressed_level_tiles.iter().enumerate() {
         let mut tile_docs = Vec::new();
         for (t_idx, tile) in level_tiles.iter().enumerate() {
-            let mut upload_stream = bucket.open_upload_stream("tile.data", None);
+            let tile_name = format!("{}_L{}_T{}.tile.{}", pyramid_uuid, pyramid_level, t_idx, dest_fmt_ext[0]);
+            let mut upload_stream = bucket.open_upload_stream(tile_name, None);
             match block_on(upload_stream.write_all(tile)) {
                 Ok(_) => (),
                 Err(_) => return Err("Error writing tile to GridFS"),

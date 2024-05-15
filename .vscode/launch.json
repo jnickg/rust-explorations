@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug (jnickg_rust_explorations)",
+            "program": "${workspaceRoot}/target/debug/jnickg_rust_explorations",
+            "args": [
+                "--host", "localhost",
+                "--user", "admin",
+                "--pass", "./secrets/mongo-pw.txt",
+                "--port", "27017"
+            ],
+            "cwd": "${workspaceRoot}",
+            "sourceLanguages": [
+                "rust"
+            ]
+        }
+    ]
+}

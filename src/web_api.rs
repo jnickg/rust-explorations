@@ -1121,18 +1121,18 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
             .into_response();
     }
 
-    let mime_type = content_type_hdr.unwrap().to_str().unwrap();
-    let format: ImageFormat = match ImageFormat::from_mime_type(mime_type) {
+    let given_mime_type = content_type_hdr.unwrap().to_str().unwrap();
+    let format: ImageFormat = match ImageFormat::from_mime_type(given_mime_type) {
         Some(fmt) => fmt,
         None => {
             return (
                 StatusCode::NOT_ACCEPTABLE,
-                format!("The given MIME Type \"{}\" is not supported", mime_type),
+                format!("The given MIME Type \"{}\" is not supported", given_mime_type),
             )
                 .into_response()
         }
     };
-    debug_print!("Detected MIME Type: \"{}\"", mime_type);
+    debug_print!("Detected MIME Type: \"{}\"", given_mime_type);
 
     let bytes = match Bytes::from_request(request, &app_state).await {
         Ok(b) => b.to_vec(),
@@ -1162,6 +1162,9 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
     // Generate image pyramid
     let ipr = ipr::IprImage(&image);
 
+    // For now we assume this is fast enough to do as part of the POST handler. Regardless, it is
+    // much faster than tiling/compressing, so it should be done as a separate phase so that the
+    // steps could be split into separate services, and scaled independently.
     let pyramid = match ipr.generate_image_pyramid() {
         Ok(p) => p,
         Err(e) => {
