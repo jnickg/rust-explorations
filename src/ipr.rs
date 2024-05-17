@@ -75,20 +75,17 @@ impl<'a> HasImageProcessingRoutines for IprImage<'a> {
     }
 
     fn generate_image_pyramid(&self) -> Result<Vec<DynamicImage>, &'static str> {
-        let mut pyramid = Vec::new();
-        pyramid.push(self.0.clone());
+        use image_pyramid::*;
 
-        let mut i = self.0.clone();
-        while i.width() > 1 && i.height() > 1 {
-            i = i.resize(
-                i.width() / 2,
-                i.height() / 2,
-                image::imageops::FilterType::Gaussian,
-            );
-            pyramid.push(i.clone());
-        }
+        let params = ImagePyramidParams {
+            pyramid_type: ImagePyramidType::Lowpass,
+            scale_factor: 0.5,
+            smoothing_type: SmoothingType::Gaussian
+        };
 
-        Ok(pyramid)
+        let pyramid = ImagePyramid::create(&self.0, Some(&params))?;
+
+        Ok(pyramid.levels)
     }
 
     /// Splits this image into tiles of the given dimensions or smaller.
