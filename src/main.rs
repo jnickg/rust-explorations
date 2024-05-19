@@ -12,7 +12,7 @@ mod web_routines;
 
 use std::sync::Arc;
 
-use clap::{Parser, arg};
+use clap::{arg, Parser};
 
 use tokio::sync::RwLock;
 

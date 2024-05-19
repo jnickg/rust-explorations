@@ -55,7 +55,6 @@ pub fn generate_tiles_for_pyramid(
             None => return Err("Failed to determine mime type"),
         };
         let dest_format = ImageFormat::from_mime_type(mime_type).unwrap();
-        dbg!(dest_format);
 
         // Grab each of the image files from GridFS
         let image_ids: &Vec<Bson> = match pyramid_doc.get_array("image_files") {
@@ -83,10 +82,6 @@ pub fn generate_tiles_for_pyramid(
         (dest_format, pyramid_images)
     };
 
-    for i in &pyramid_images {
-        dbg!((i.color(), i.width(), i.height()));
-    }
-
     // Now that we've grabbed all the images in the pyramid and updated the doc, actually create
     // the tiles for each pyramid level, then encode them to the destination format and brotli
     // compress them. Use Rayon to process each pyramid level separately when breaking into tiles,
@@ -101,13 +96,10 @@ pub fn generate_tiles_for_pyramid(
         .map(|(idx, i): (usize, &Arc<DynamicImage>)| -> Vec<Vec<u8>> {
             let image = IprImage(i);
             let tiles = image.make_tiles(512, 512).unwrap();
-            dbg!((idx, tiles.tiles.len()));
             let compressed_tiles: Vec<Vec<u8>> = tiles
                 .tiles
                 .par_iter()
-                .enumerate()
-                .map(|(t_idx, t): (usize, &DynamicImage)| -> Vec<u8> {
-                    dbg!((t_idx, t.color(), t.width(), t.height()));
+                .map(|t: &DynamicImage| -> Vec<u8> {
                     let tile = IprImage(t);
                     tile.compress_brotli(10, 24, Some(dest_format)).unwrap()
                 })
@@ -120,7 +112,6 @@ pub fn generate_tiles_for_pyramid(
 
     // We don't need the mutex any more, to slurp the vec back out
     let pyramid_level_tiles = locking_pyramid_level_tiles.lock().unwrap();
-    dbg!(&pyramid_level_tiles);
 
     // For each Pyramid level & tile, we write that object to GridFS and return a doc describing
     // the tile (x/y loc, w/h, index. In the outer layer, aggregate all Bson::Documents into a
@@ -138,7 +129,10 @@ pub fn generate_tiles_for_pyramid(
     for (pyramid_level, level_tiles) in compressed_level_tiles.iter().enumerate() {
         let mut tile_docs = Vec::new();
         for (t_idx, tile) in level_tiles.iter().enumerate() {
-            let tile_name = format!("{}_L{}_T{}.tile.{}", pyramid_uuid, pyramid_level, t_idx, dest_fmt_ext[0]);
+            let tile_name = format!(
+                "{}_L{}_T{}.tile.{}",
+                pyramid_uuid, pyramid_level, t_idx, dest_fmt_ext[0]
+            );
             let mut upload_stream = bucket.open_upload_stream(tile_name, None);
             match block_on(upload_stream.write_all(tile)) {
                 Ok(_) => (),
@@ -162,7 +156,6 @@ pub fn generate_tiles_for_pyramid(
                 "tile_id": tile_obj_id.to_string()
             });
         }
-        dbg!(&tile_docs);
         // Now that we have all the tile docs for this pyramid level, we need to add some
         // metadata about the pyramid level itself
         let pyramid_level_u32: u32 = pyramid_level.try_into().unwrap(); // How annoying
@@ -173,7 +166,6 @@ pub fn generate_tiles_for_pyramid(
             "tiles": tile_docs
         });
     }
-    dbg!(&level_docs);
 
     let pyramids_collection: Collection<Document> = db.collection("pyramids");
     // Update document so "tiles" field contains all the tiles

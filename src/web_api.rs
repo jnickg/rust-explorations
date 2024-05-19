@@ -1127,7 +1127,10 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
         None => {
             return (
                 StatusCode::NOT_ACCEPTABLE,
-                format!("The given MIME Type \"{}\" is not supported", given_mime_type),
+                format!(
+                    "The given MIME Type \"{}\" is not supported",
+                    given_mime_type
+                ),
             )
                 .into_response()
         }

@@ -1,5 +1,4 @@
 use std::io::Cursor;
-
 use image::{DynamicImage, GenericImageView, ImageFormat};
 
 use crate::dims::{Cols, Dims, HasDims, Rows};
@@ -80,7 +79,7 @@ impl<'a> HasImageProcessingRoutines for IprImage<'a> {
         let params = ImagePyramidParams {
             pyramid_type: ImagePyramidType::Lowpass,
             scale_factor: 0.5,
-            smoothing_type: SmoothingType::Gaussian
+            smoothing_type: SmoothingType::Gaussian,
         };
 
         let pyramid = ImagePyramid::create(&self.0, Some(&params))?;
@@ -128,7 +127,8 @@ impl<'a> HasImageProcessingRoutines for IprImage<'a> {
         let count_across = (width + tile_width - 1) / tile_width;
         let count_down = (height + tile_height - 1) / tile_height;
 
-        let mut tile_buffers = Vec::new();
+        let mut tiles = Vec::<DynamicImage>::new();
+        // let mut tiles = Vec::new();
         for y in 0..count_down {
             for x in 0..count_across {
                 let actual_tile_width = if x == count_across - 1 {
@@ -142,22 +142,15 @@ impl<'a> HasImageProcessingRoutines for IprImage<'a> {
                     tile_height
                 };
 
-                // Window into original image. We'll clone the windows below
-                let tile = i.view(
+                let tile = i.crop_imm(
                     x * tile_width,
                     y * tile_height,
                     actual_tile_width,
                     actual_tile_height,
                 );
-                tile_buffers.push(tile.to_image());
+                tiles.push(tile);
             }
         }
-
-        let tiles = tile_buffers
-            .iter()
-            // WHY is this clone needed when to_image() already makes a new buffer?
-            .map(|t| DynamicImage::ImageRgba8(t.clone()))
-            .collect();
 
         Ok(ImageTiles {
             original_height: i.height(),
