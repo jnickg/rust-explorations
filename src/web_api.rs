@@ -92,8 +92,8 @@ pub async fn get_index(State(app_state): AppState) -> Response {
     let images_coll: Collection<Document> = db.collection("images");
     let mut cursor = match images_coll.find(None, None).await {
         Ok(c) => c,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to query image database.\n",
@@ -117,8 +117,8 @@ pub async fn get_index(State(app_state): AppState) -> Response {
                 let mut download_stream = match bucket.open_download_stream(image_id.clone()).await
                 {
                     Ok(s) => s,
-                    Err(e) => {
-                        debug_print!("Error: {}", e);
+                    Err(_e) => {
+                        debug_print!("Error: {}", _e);
                         return (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             "Failed to open download stream for image.\n",
@@ -129,8 +129,8 @@ pub async fn get_index(State(app_state): AppState) -> Response {
 
                 match download_stream.read_to_end(&mut image_bytes).await {
                     Ok(_) => (),
-                    Err(e) => {
-                        debug_print!("Error: {}", e);
+                    Err(_e) => {
+                        debug_print!("Error: {}", _e);
                         return (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             "Failed to read image data from database.\n",
@@ -144,8 +144,8 @@ pub async fn get_index(State(app_state): AppState) -> Response {
                     ImageFormat::from_mime_type(mime_type).unwrap(),
                 ) {
                     Ok(img) => img,
-                    Err(e) => {
-                        debug_print!("Error: {}", e);
+                    Err(_e) => {
+                        debug_print!("Error: {}", _e);
                         return (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             "Failed to load image from memory.\n",
@@ -156,8 +156,8 @@ pub async fn get_index(State(app_state): AppState) -> Response {
 
                 images.insert(name.to_string(), image);
             }
-            Err(e) => {
-                debug_print!("Error: {}", e);
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to read image document.\n",
@@ -601,8 +601,8 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
     let upload_result = upload_stream.write_all(&bytes).await;
     match upload_result {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to upload image to database.\n",
@@ -610,21 +610,14 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
                 .into_response();
         }
     }
-    let image_id = upload_stream.id();
-    let images = db.collection("images");
-    let doc = doc! {
-        "name": image_name.clone(),
-        "image": image_id,
-        "mime_type": format.to_mime_type(),
-    };
-    dbg!(&doc);
+    let image_id = upload_stream.id().clone();
 
     // Now that we have a handle to the uploaded ID and created a document, close out the
     // upload to latch it.
     match upload_stream.close().await {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to close upload stream for image.\n",
@@ -633,10 +626,17 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
         }
     }
 
-    match images.insert_one(doc, None).await {
+    let doc = doc! {
+        "name": image_name.clone(),
+        "image": image_id,
+        "mime_type": format.to_mime_type(),
+    };
+    dbg!(&doc);
+
+    match db.collection("images").insert_one(doc, None).await {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to insert image into database.\n",
@@ -650,6 +650,73 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
         format!("Image added with name {}.", image_name),
     )
         .into_response()
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/images",
+    responses(
+        (status = StatusCode::OK, description = "Returned a JSON list of image documents", body = Json),
+    )
+)]
+pub async fn get_images(
+    State(app_state): AppState
+) -> Response {
+    let app = &mut app_state.read().await;
+    if app.db.is_none() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to acquire handle to image database.\n",
+        )
+            .into_response();
+    }
+    let db = app.db.as_ref().unwrap();
+    let images: Collection<Document> = db.collection("images");
+    let mut found = match images.find(None, None).await {
+        Ok(cursor) => cursor,
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to query image database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    let mut image_docs = Vec::new();
+    while let Some(doc) = found.next().await {
+        match doc {
+            Ok(d) => {
+                image_docs.push(d);
+            }
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to read image document.\n",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let json = match serde_json::to_string(&image_docs) {
+        Ok(j) => j,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to serialize pyramid document.\n",
+            )
+                .into_response();
+        }
+    };
+
+    Response::builder()
+    .status(StatusCode::OK)
+    .header("Content-Type", "application/json")
+    .body(Body::from(json.to_string()))
+    .unwrap()
 }
 
 #[utoipa::path(
@@ -695,8 +762,8 @@ pub async fn get_image(
         .await
     {
         Ok(cursor) => cursor,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to query image database.\n",
@@ -709,8 +776,8 @@ pub async fn get_image(
     let image_doc = match found.next().await {
         Some(doc) => match doc {
             Ok(d) => d,
-            Err(e) => {
-                debug_print!("Error: {}", e);
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to read image document.\n",
@@ -754,8 +821,8 @@ pub async fn get_image(
     let mut image_bytes = Vec::new();
     let mut download_stream = match bucket.open_download_stream(image_id.clone()).await {
         Ok(s) => s,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to open download stream for image.\n",
@@ -766,8 +833,8 @@ pub async fn get_image(
 
     match download_stream.read_to_end(&mut image_bytes).await {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to read image data from database.\n",
@@ -781,8 +848,8 @@ pub async fn get_image(
         ImageFormat::from_mime_type(mime_type).unwrap(),
     ) {
         Ok(img) => img,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to load image from memory.\n",
@@ -897,8 +964,8 @@ pub async fn put_image(
         .await
     {
         Ok(d) => d,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to query image database.\n",
@@ -915,8 +982,8 @@ pub async fn put_image(
         let bucket = db.gridfs_bucket(None);
         match bucket.delete(image_id.clone()).await {
             Ok(_) => (),
-            Err(e) => {
-                debug_print!("Error: {}", e);
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to delete image from database.\n",
@@ -934,8 +1001,8 @@ pub async fn put_image(
             .await
         {
             Ok(_) => (),
-            Err(e) => {
-                debug_print!("Error: {}", e);
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to delete image document from database.\n",
@@ -951,8 +1018,8 @@ pub async fn put_image(
     let upload_result = upload_stream.write_all(&bytes).await;
     match upload_result {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to upload image to database.\n",
@@ -974,8 +1041,8 @@ pub async fn put_image(
     // upload to latch it.
     match upload_stream.close().await {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to close upload stream for image.\n",
@@ -986,8 +1053,8 @@ pub async fn put_image(
 
     match images.insert_one(doc, None).await {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to insert image into database.\n",
@@ -1043,8 +1110,8 @@ pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<Str
         .await
     {
         Ok(d) => d,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to query image database.\n",
@@ -1066,8 +1133,8 @@ pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<Str
     let bucket = db.gridfs_bucket(None);
     match bucket.delete(image_id.clone()).await {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to delete image from database.\n",
@@ -1085,8 +1152,8 @@ pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<Str
         .await
     {
         Ok(_) => (),
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to delete image document from database.\n",
@@ -1152,8 +1219,8 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
     // Decode image using provided information
     let image = match image::load_from_memory_with_format(&bytes, format) {
         Ok(img) => img,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to load image from memory.\n",
@@ -1170,8 +1237,8 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
     // steps could be split into separate services, and scaled independently.
     let pyramid = match ipr.generate_image_pyramid() {
         Ok(p) => p,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to generate image pyramid.\n",
@@ -1211,8 +1278,8 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
         let mut upload_stream = bucket.open_upload_stream(format!("pyramid_{}", i), None);
         match upload_stream.write_all(&data).await {
             Ok(_) => (),
-            Err(e) => {
-                debug_print!("Error: {}", e);
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to upload image to database.\n",
@@ -1226,8 +1293,8 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
 
         match upload_stream.close().await {
             Ok(_) => (),
-            Err(e) => {
-                debug_print!("Error: {}", e);
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to close upload stream for image.\n",
@@ -1255,8 +1322,8 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
 
         let result = match db.collection("images").insert_one(doc, None).await {
             Ok(r) => r,
-            Err(e) => {
-                debug_print!("Error: {}", e);
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to insert image into database.\n",
@@ -1302,8 +1369,8 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
         .await
     {
         Ok(r) => r,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to insert pyramid into database.\n",
@@ -1370,8 +1437,8 @@ pub async fn get_pyramid(State(app_state): AppState, Path(uuid): Path<String>) -
         .await
     {
         Ok(d) => d,
-        Err(e) => {
-            debug_print!("Error: {}", e);
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to query image database.\n",

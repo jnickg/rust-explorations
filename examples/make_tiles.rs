@@ -30,8 +30,8 @@ fn main() {
     dbg!(&args);
     let image = match image::open(&args.input) {
         Ok(image) => image,
-        Err(e) => {
-            eprintln!("Error opening image: {}", e);
+        Err(_e) => {
+            eprintln!("Error opening image: {}", _e);
             return;
         }
     };
@@ -45,8 +45,8 @@ fn main() {
     let ipr = IprImage(&image);
     let tiles = match ipr.make_tiles(args.tile_width, args.tile_height) {
         Ok(tiles) => tiles,
-        Err(e) => {
-            eprintln!("Error making tiles: {}", e);
+        Err(_e) => {
+            eprintln!("Error making tiles: {}", _e);
             return;
         }
     };
@@ -60,7 +60,7 @@ fn main() {
         ));
         match tile.save(&filename) {
             Ok(_) => println!("Saved tile to {}", filename.to_str().unwrap()),
-            Err(e) => eprintln!("Error saving tile: {}", e),
+            Err(_e) => eprintln!("Error saving tile: {}", _e),
         }
     }
 }

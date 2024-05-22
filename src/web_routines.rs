@@ -124,23 +124,42 @@ pub fn generate_tiles_for_pyramid(
             .bucket_name("tiles".to_string())
             .build(),
     );
-    let dest_fmt_ext = dest_format.extensions_str();
     let mut level_docs = Vec::new();
     for (pyramid_level, level_tiles) in compressed_level_tiles.iter().enumerate() {
         let mut tile_docs = Vec::new();
         for (t_idx, tile) in level_tiles.iter().enumerate() {
-            let tile_name = format!(
-                "{}_L{}_T{}.tile.{}",
-                pyramid_uuid, pyramid_level, t_idx, dest_fmt_ext[0]
+            let tile_name_base = format!(
+                "{}_L{}_T{}",
+                pyramid_uuid, pyramid_level, t_idx
             );
-            let mut upload_stream = bucket.open_upload_stream(tile_name, None);
+            
+            let mut upload_stream = bucket.open_upload_stream(&tile_name_base, None);
             match block_on(upload_stream.write_all(tile)) {
                 Ok(_) => (),
                 Err(_) => return Err("Error writing tile to GridFS"),
             }
-            let tile_obj_id = upload_stream.id();
+            let tile_obj_id = upload_stream.id().clone();
             let level_tiles = &pyramid_level_tiles[pyramid_level];
             let tile_image = &level_tiles.tiles[t_idx];
+
+            match block_on(upload_stream.close()) {
+                Ok(_) => (),
+                Err(_) => {
+                    return Err("Error closing upload stream");
+                }
+            }
+
+            let image_doc = doc! {
+                "name": tile_name_base.clone(),
+                "image": tile_obj_id.clone(),
+                "mime_type": dest_format.to_mime_type(),
+            };
+            dbg!(&image_doc);
+
+            match block_on(db.collection("images").insert_one(image_doc, None)) {
+                Ok(_) => (),
+                Err(_) => return Err("Error inserting image into database"),
+            };
 
             // Based on tile size, original dimensions, and tile index, determine our x/y;
             let t_idx: u32 = t_idx.try_into().unwrap();
@@ -153,7 +172,8 @@ pub fn generate_tiles_for_pyramid(
                 "width": tile_image.width(),
                 "height": tile_image.height(),
                 "index": t_idx,
-                "tile_id": tile_obj_id.to_string()
+                "tile_id": tile_obj_id.clone(),
+                "name": tile_name_base.clone()
             });
         }
         // Now that we have all the tile docs for this pyramid level, we need to add some

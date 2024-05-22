@@ -88,8 +88,8 @@ async fn main() {
     let client = Client::with_uri_str(uri).await;
     let database = match client {
         Ok(c) => c.database("tiler"),
-        Err(e) => {
-            eprintln!("Error: {:?}", e);
+        Err(_e) => {
+            eprintln!("Error: {:?}", _e);
             return;
         }
     };
@@ -114,6 +114,7 @@ async fn main() {
                 .post(api::post_something_with_id),
         )
         .route("/image", post(api::post_image))
+        .route("/images", get(api::get_images))
         .route(
             "/image/:name",
             get(api::get_image)
