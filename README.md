@@ -68,7 +68,7 @@ sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions
   - [x] integrate Tile support (Doc + Images)
 - [ ] Wasm support
   - [ ] Headless backend
-  - [ ] In-browser frontend (Esmcripten OK)
+  - [ ] In-browser frontend - follow [this](https://robert.kra.hn/posts/2022-04-03_rust-web-wasm/)
 - [ ] Websocket support for long-running tasks
 - [ ] User interface
 
