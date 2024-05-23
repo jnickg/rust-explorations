@@ -22,7 +22,7 @@ use clap::{arg, Parser};
 use tokio::sync::RwLock;
 
 use ::axum::{
-    body::{Body, Bytes},
+    body::Bytes,
     extract::{FromRequest, Path, Request, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -33,7 +33,7 @@ use ::axum::{
 use mongodb::Client;
 
 use tower_http::{trace, services::ServeDir};
-use tower::{ServiceBuilder, ServiceExt};
+use tower::ServiceExt;
 extern crate tracing;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -75,6 +75,10 @@ struct Args {
     pass: String,
 
     /// The port through which to access MongoDB
+    #[arg(long = "db-port", value_name = "NUM")]
+    db_port: u16,
+
+    /// The port on which the server runs
     #[arg(long, value_name = "NUM")]
     port: u16,
 
@@ -93,7 +97,7 @@ async fn main() {
     let password_str = std::fs::read_to_string(&args.pass).unwrap();
     let uri = format!(
         "mongodb://{}:{}@{}:{}/",
-        args.user, password_str, args.host, args.port
+        args.user, password_str, args.host, args.db_port
     );
     let client = Client::with_uri_str(uri).await;
     let database = match client {
@@ -170,9 +174,8 @@ async fn main() {
         .layer(trace_layer)
         .with_state(Arc::new(RwLock::new(state)));
 
-    let port = 3000;
-    println!("Listening on port {}", port);
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port))
+    println!("Listening on port {}", args.port);
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", args.port))
         .await
         .unwrap();
     ::axum::serve(listener, app).await.unwrap();

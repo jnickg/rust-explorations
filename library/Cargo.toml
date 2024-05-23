@@ -3,9 +3,6 @@ name = "jnickg_imaging"
 version = "0.1.0"
 edition = "2021"
 
-[toolchain]
-channel = "nightly"
-
 [dependencies]
 auto-impl-ops = "0.2.1"
 brotli = "6.0.0"
