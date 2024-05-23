@@ -119,11 +119,7 @@ pub fn generate_tiles_for_pyramid(
     // metadata about that pyramid level (index, w/h)
     let app = &mut app_state.blocking_write();
     let db = app.db.as_ref().unwrap();
-    let bucket = db.gridfs_bucket(
-        GridFsBucketOptions::builder()
-            .bucket_name("tiles".to_string())
-            .build(),
-    );
+    let bucket = db.gridfs_bucket(None);
     let mut level_docs = Vec::new();
     for (pyramid_level, level_tiles) in compressed_level_tiles.iter().enumerate() {
         let mut tile_docs = Vec::new();
@@ -153,6 +149,7 @@ pub fn generate_tiles_for_pyramid(
                 "name": tile_name_base.clone(),
                 "image": tile_obj_id.clone(),
                 "mime_type": dest_format.to_mime_type(),
+                "brotli": true,
             };
             dbg!(&image_doc);
 

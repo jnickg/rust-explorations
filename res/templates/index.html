@@ -49,11 +49,11 @@
           <td><b>Name</b></td>
           <td><b>URL</b></td>
         </tr>
-        {% for kvp in images %}
+        {% for i_name in images %}
           <tr>
-            <td>"{{kvp.0}}"</td>
+            <td>"{{i_name}}"</td>
             <td>
-              <a href="/api/v1/image/{{kvp.0}}">/api/v1/image/{{kvp.0}}</a>
+              <a href="/api/v1/image/{{i_name}}">/api/v1/image/{{i_name}}</a>
             </td>
           </tr>
         {% endfor %}

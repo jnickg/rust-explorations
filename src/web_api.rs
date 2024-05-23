@@ -65,14 +65,14 @@ pub struct Documentation;
 #[template(path = "index.html")]
 pub struct IndexTemplate<'a> {
     matrices: &'a HashMap<String, DynMatrix<f64>>,
-    images: &'a HashMap<String, DynamicImage>,
+    images: &'a Vec<String>,
     stylesheet: &'static str,
 }
 
 impl<'a> IndexTemplate<'a> {
     fn new(
         matrices: &'a HashMap<String, DynMatrix<f64>>,
-        images: &'a HashMap<String, DynamicImage>,
+        images: &'a Vec<String>,
     ) -> Self {
         Self {
             matrices,
@@ -87,8 +87,7 @@ pub async fn get_index(State(app_state): AppState) -> Response {
 
     // Get handle to gridfs
     let db = app.db.as_ref().unwrap();
-    let bucket = db.gridfs_bucket(None);
-    let mut images = HashMap::<String, DynamicImage>::new();
+    let mut images = Vec::<String>::new();
     let images_coll: Collection<Document> = db.collection("images");
     let mut cursor = match images_coll.find(None, None).await {
         Ok(c) => c,
@@ -110,51 +109,8 @@ pub async fn get_index(State(app_state): AppState) -> Response {
         match doc {
             Ok(d) => {
                 let name = d.get("name").unwrap().as_str().unwrap();
-                let image_id = d.get("image").unwrap();
-                let mime_type = d.get("mime_type").unwrap().as_str().unwrap();
 
-                let mut image_bytes = Vec::new();
-                let mut download_stream = match bucket.open_download_stream(image_id.clone()).await
-                {
-                    Ok(s) => s,
-                    Err(_e) => {
-                        debug_print!("Error: {}", _e);
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "Failed to open download stream for image.\n",
-                        )
-                            .into_response();
-                    }
-                };
-
-                match download_stream.read_to_end(&mut image_bytes).await {
-                    Ok(_) => (),
-                    Err(_e) => {
-                        debug_print!("Error: {}", _e);
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "Failed to read image data from database.\n",
-                        )
-                            .into_response();
-                    }
-                };
-
-                let image = match image::load_from_memory_with_format(
-                    &image_bytes,
-                    ImageFormat::from_mime_type(mime_type).unwrap(),
-                ) {
-                    Ok(img) => img,
-                    Err(_e) => {
-                        debug_print!("Error: {}", _e);
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "Failed to load image from memory.\n",
-                        )
-                            .into_response();
-                    }
-                };
-
-                images.insert(name.to_string(), image);
+                images.push(name.to_string());
             }
             Err(_e) => {
                 debug_print!("Error: {}", _e);
@@ -659,9 +615,7 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
         (status = StatusCode::OK, description = "Returned a JSON list of image documents", body = Json),
     )
 )]
-pub async fn get_images(
-    State(app_state): AppState
-) -> Response {
+pub async fn get_images(State(app_state): AppState) -> Response {
     let app = &mut app_state.read().await;
     if app.db.is_none() {
         return (
@@ -713,10 +667,10 @@ pub async fn get_images(
     };
 
     Response::builder()
-    .status(StatusCode::OK)
-    .header("Content-Type", "application/json")
-    .body(Body::from(json.to_string()))
-    .unwrap()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(json.to_string()))
+        .unwrap()
 }
 
 #[utoipa::path(
@@ -843,21 +797,6 @@ pub async fn get_image(
         }
     };
 
-    let image = match image::load_from_memory_with_format(
-        &image_bytes,
-        ImageFormat::from_mime_type(mime_type).unwrap(),
-    ) {
-        Ok(img) => img,
-        Err(_e) => {
-            debug_print!("Error: {}", _e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to load image from memory.\n",
-            )
-                .into_response();
-        }
-    };
-
     // If a header is specified, prefer to honor that over what might be in the request URL
     let dest_format = match request.headers().get("Accept") {
         Some(accept_hdr) => {
@@ -870,20 +809,70 @@ pub async fn get_image(
         None => default_format,
     };
 
-    let mut data = Vec::new();
-    let mut cursor = Cursor::new(&mut data);
-    match image.write_to(&mut cursor, dest_format) {
-        Ok(_) => Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-Type", dest_format.to_mime_type())
-            .body(Body::from(data))
-            .unwrap(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to write image data to response body.\n",
-        )
-            .into_response(),
+    let is_brotli: bool = image_doc.get_bool("brotli").unwrap_or(false);
+
+    image_bytes = if dest_format == default_format {
+        image_bytes
+    } else {
+        let data_to_re_encode = if is_brotli {
+            let mut decompressed = Vec::new();
+            match brotli::BrotliDecompress(
+                &mut Cursor::new(image_bytes),
+                &mut Cursor::new(&mut decompressed),
+            ) {
+                Ok(_) => (),
+                Err(_) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to decompress image data.\n",
+                    )
+                        .into_response();
+                }
+            }
+            decompressed
+        } else {
+            image_bytes
+        };
+
+        let image = match image::load_from_memory_with_format(
+            &data_to_re_encode,
+            ImageFormat::from_mime_type(mime_type).unwrap(),
+        ) {
+            Ok(img) => img,
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to load image from memory.\n",
+                )
+                    .into_response();
+            }
+        };
+
+        let mut re_encoded_data = Vec::new();
+        let mut cursor = Cursor::new(&mut re_encoded_data);
+        match image.write_to(&mut cursor, dest_format) {
+            Ok(_) => re_encoded_data,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to write image data to response body.\n",
+                )
+                    .into_response()
+            }
+        }
+    };
+
+    let mut builder = Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", dest_format.to_mime_type());
+    if is_brotli {
+        builder = builder.header("Content-Encoding", "br");
     }
+
+    builder
+        .body(Body::from(image_bytes))
+        .unwrap()
 }
 
 #[utoipa::path(
