@@ -25,15 +25,18 @@ docker compose build mongodb
 Set up admin user credentials for the MongoDB container
 
 ```bash
-echo "myPassword" > server/secrets/mongo-pw.txt
-echo "myAdminUser" > server/secrets/mongo-user.txt
+echo "myPassword" > secrets/mongo-pw.txt
+echo "myAdminUser" > secrets/mongo-user.txt
 # This is required because docker compose and/or official MongoDB image is jank and won't honor
 # MONGO_INITDB_ROOT_PASSWORD_FILE environment variables, just MONGO_INITDB_ROOT_PASSWORD. To keep
 # the passwords out of source control (out of docker-compose.yaml), we make an env file for the
 # mongo image, which seems to work
 ./generate_mongo_env.sh
 docker compose up --build -d mongodb --force-recreate
-cargo run -- --host localhost --user myAdminUser --pass ./server/secrets/mongo-pw.txt --port 27017
+# This builds the frontend and backend and keeps them both updated live as files change.
+# Alternatively, you could run:
+# cargo run --bin jnickg_tile_server -- --host localhost --user admin --pass ./secrets/mongo-pw.txt --db-port 27017 --port 8081 --static-dir dist/
+./run_site_dev.sh
 ```
 
 ### Using
