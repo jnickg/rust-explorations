@@ -25,15 +25,15 @@ docker compose build mongodb
 Set up admin user credentials for the MongoDB container
 
 ```bash
-echo "myPassword" > secrets/mongo-pw.txt
-echo "myAdminUser" > secrets/mongo-user.txt
+echo "myPassword" > server/secrets/mongo-pw.txt
+echo "myAdminUser" > server/secrets/mongo-user.txt
 # This is required because docker compose and/or official MongoDB image is jank and won't honor
 # MONGO_INITDB_ROOT_PASSWORD_FILE environment variables, just MONGO_INITDB_ROOT_PASSWORD. To keep
 # the passwords out of source control (out of docker-compose.yaml), we make an env file for the
 # mongo image, which seems to work
 ./generate_mongo_env.sh
 docker compose up --build -d mongodb --force-recreate
-cargo run -- --host localhost --user myAdminUser --pass ./secrets/mongo-pw.txt --port 27017
+cargo run -- --host localhost --user myAdminUser --pass ./server/secrets/mongo-pw.txt --port 27017
 ```
 
 ### Using
@@ -58,14 +58,14 @@ sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions
 - [x] Matrix Math REST interface (dot product, add, subtract)
 - [x] Image filtering/convolution with arbitrary kernel
 - [x] Image Pyramid generation (Gaussian filter + strided subsampling)
-- [ ] Pyramid Tile generation ($\text{512}\times\text{512}$)
-- [ ] CLI tool for pyramid/tile generation
-- [ ] Brotli compression of tiled image pyramid
+- [x] Pyramid Tile generation ($\text{512}\times\text{512}$)
+- [x] CLI tool for pyramid/tile generation
+- [x] Brotli compression of tiled image pyramid
 - [x] Persistent DB backend (MongoDB)
   - [x] integrate Image support (Doc + GridFS)
   - [ ] integrate Matrix support (Doc)
   - [x] integrate Pyramid support (Doc + Images)
-  - [ ] integrate Tile support (Doc + Images)
+  - [x] integrate Tile support (Doc + Images)
 - [ ] Wasm support
   - [ ] Headless backend
   - [ ] In-browser frontend (Esmcripten OK)
