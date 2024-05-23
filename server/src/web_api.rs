@@ -80,7 +80,7 @@ impl<'a> IndexTemplate<'a> {
     }
 }
 
-pub async fn get_index(State(app_state): AppState) -> Response {
+pub async fn get_api_index(State(app_state): AppState) -> Response {
     let app = &mut app_state.read().await;
 
     // Get handle to gridfs

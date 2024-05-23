@@ -22,7 +22,7 @@ use clap::{arg, Parser};
 use tokio::sync::RwLock;
 
 use ::axum::{
-    body::Bytes,
+    body::{Body, Bytes},
     extract::{FromRequest, Path, Request, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -32,7 +32,8 @@ use ::axum::{
 
 use mongodb::Client;
 
-use tower_http::trace;
+use tower_http::{trace, services::ServeDir};
+use tower::{ServiceBuilder, ServiceExt};
 extern crate tracing;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -76,6 +77,10 @@ struct Args {
     /// The port through which to access MongoDB
     #[arg(long, value_name = "NUM")]
     port: u16,
+
+    /// Set the directory where static files are to be found for serving
+    #[clap(long = "static-dir", default_value = "./dist")]
+    static_dir: String,
 }
 
 #[tokio::main]
@@ -109,6 +114,8 @@ async fn main() {
         .on_response(trace::DefaultOnResponse::new().level(tracing::Level::INFO));
 
     let api_routes = Router::new()
+        .route("/", get(api::get_api_index))
+        .route("/index.html", get(api::get_api_index))
         .route("/hello", get(api::get_hello))
         .route("/something", post(api::post_something))
         .route(
@@ -152,8 +159,9 @@ async fn main() {
     let rapidoc_ui = RapiDoc::new("/api-docs/openapi.json").path("/rapidoc");
 
     let app = Router::new()
-        .route("/", get(api::get_index))
-        .route("/index.html", get(api::get_index))
+        .fallback_service(get(|req| async move {
+            ServeDir::new(args.static_dir).oneshot(req).await.unwrap()
+        }))
         .merge(swagger_ui)
         .merge(redoc_ui)
         .merge(rapidoc_ui)

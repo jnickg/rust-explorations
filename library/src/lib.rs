@@ -1,4 +1,5 @@
 #![feature(test)]
+#![feature(negative_impls)]
 
 pub mod buffer_element;
 pub mod circular_buffer;

@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 pub enum Eval<const COND: bool> {}
 
 pub trait IsTrue {}
@@ -8,12 +6,30 @@ pub trait IsFalse {}
 impl IsTrue for Eval<true> {}
 impl IsFalse for Eval<false> {}
 
-pub struct TheTypes<T, U> {
-    __p1: PhantomData<T>,
-    __p2: PhantomData<U>,
-}
-pub trait AreSame {}
-pub trait AreNotSame {}
+pub trait AreSameType {}
+impl<T> AreSameType for (T, T) {}
 
-impl<T> AreSame for TheTypes<T, T> {}
-impl<T, U> AreNotSame for TheTypes<T, U> {}
+/// free function for `SameType`
+/// ```
+/// use jnickg_imaging::my_traits::require_same_type;
+/// require_same_type::<usize, usize>(); // no-op
+/// ```
+/// ```compile_fail
+/// use jnickg_imaging::my_traits::require_same_type;
+/// require_same_type::<usize, String>(); // fails
+/// ```
+pub const fn require_same_type<A, B>()
+where
+    (A, B): AreSameType,
+{
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn require_same_type_compiles_when_same() {
+        require_same_type::<usize, usize>();
+    }
+}

@@ -2,7 +2,6 @@ use crate::dims::HasDims;
 use crate::dyn_matrix::DynMatrix;
 use crate::element::Element;
 use crate::matrix::Matrix;
-use crate::my_traits::{AreNotSame, TheTypes};
 
 pub trait FromMat<T: Element, const R: usize, const C: usize> {
     fn from_mat(m: Matrix<T, R, C>) -> Self;
@@ -10,7 +9,6 @@ pub trait FromMat<T: Element, const R: usize, const C: usize> {
 
 impl<T: Element, U: Element, const R: usize, const C: usize> FromMat<T, R, C> for DynMatrix<U>
 where
-    TheTypes<T, U>: AreNotSame,
     T: Into<U>,
 {
     fn from_mat(matrix: Matrix<T, R, C>) -> Self {
@@ -26,7 +24,6 @@ where
 
 impl<T: Element, U: Element, const R: usize, const C: usize> FromMat<T, R, C> for Matrix<U, R, C>
 where
-    TheTypes<T, U>: AreNotSame,
     T: Into<U>,
 {
     fn from_mat(matrix: Matrix<T, R, C>) -> Self {
@@ -46,7 +43,6 @@ pub trait FromDynMat<T: Element> {
 
 impl<T: Element, U: Element> FromDynMat<T> for DynMatrix<U>
 where
-    TheTypes<T, U>: AreNotSame,
     T: Into<U>,
 {
     fn from_dyn_mat(matrix: DynMatrix<T>) -> Self {

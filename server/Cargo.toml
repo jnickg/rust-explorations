@@ -29,7 +29,7 @@ serde_json = "1.0.116"
 test-case = "3.3.1"
 thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["full"] }
-tower-http = { version = "0.5.2", features = ["trace"] }
+tower-http = { version = "0.5.2", features = ["full", "trace"] }
 tracing = { version = "0.1.40", features = ["async-await"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 utoipa = { version = "4.2.0", features = ["axum_extras"] }
@@ -37,3 +37,5 @@ utoipa-rapidoc = { version = "3.0.0", features = ["axum"] }
 utoipa-redoc = { version = "3.0.0", features = ["axum"] }
 utoipa-swagger-ui = { version = "6.0.0", features = ["axum"] }
 uuid = "1.8.0"
+tower = "0.4.13"
+log = "0.4.21"
