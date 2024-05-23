@@ -1,0 +1,27 @@
+[package]
+name = "jnickg_imaging"
+version = "0.1.0"
+edition = "2021"
+
+[toolchain]
+channel = "nightly"
+
+[dependencies]
+auto-impl-ops = "0.2.1"
+brotli = "6.0.0"
+clap = { version = "4.5.4", features = ["derive"] }
+futures = "0.3.30"
+futures-util = "0.3.30"
+image = "0.25.1"
+image-pyramid = "0.2.2"
+itertools = "0.12.1"
+num = "0.4.1"
+rand = "0.8.5"
+rayon = "1.10.0"
+rtest = "0.1.4"
+serde = { version = "1.0.198", features = ["derive", "serde_derive"] }
+serde_json = "1.0.116"
+test-case = "3.3.1"
+thiserror = "1.0.58"
+utoipa = { version = "4.2.0", features = ["axum_extras"] }
+uuid = "1.8.0"

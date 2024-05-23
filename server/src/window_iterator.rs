@@ -34,6 +34,7 @@ pub struct ImageBufferWindow<'a, T> {
     total_els: usize,
 }
 
+#[allow(dead_code)]
 pub struct ImageBufferWindowBuilder<'a, T> {
     image: ImageDescriptor<'a, T>,
     stride: Option<StrideDescriptor>,
@@ -42,6 +43,7 @@ pub struct ImageBufferWindowBuilder<'a, T> {
 }
 
 impl<'a, T> ImageBufferWindowBuilder<'a, T> {
+    #[allow(dead_code)]
     pub fn with_stride(mut self, per_element: usize, per_row: usize) -> Self {
         self.stride = Some(StrideDescriptor {
             per_element,
@@ -50,11 +52,13 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_roi(mut self, x1: isize, x2: isize, y1: isize, y2: isize) -> Self {
         self.roi = Some(RoiDescriptor { x1, x2, y1, y2 });
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_max_roi(mut self) -> Self {
         self.roi = Some(RoiDescriptor {
             x1: 0,
@@ -65,6 +69,7 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn shift_roi(mut self, dx: isize, dy: isize) -> Self {
         self.roi = self.roi.map(|roi| RoiDescriptor {
             x1: roi.x1 + dx,
@@ -75,11 +80,13 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_default(mut self, default: &'a T) -> Self {
         self.default = Some(default);
         self
     }
 
+    #[allow(dead_code)]
     pub fn build(self) -> ImageBufferWindow<'a, T> {
         let roi = self.roi.unwrap();
         let dist_from_x1_to_x2: usize = (roi.x2 - roi.x1).try_into().unwrap();
@@ -100,6 +107,7 @@ impl<'a, T> ImageBufferWindowBuilder<'a, T> {
 
 impl<'a, T> ImageBufferWindow<'a, T> {
     #[allow(clippy::new_ret_no_self)]
+    #[allow(dead_code)]
     pub fn new(data: &'a Vec<T>, width: usize, height: usize) -> ImageBufferWindowBuilder<'a, T> {
         ImageBufferWindowBuilder {
             image: ImageDescriptor {

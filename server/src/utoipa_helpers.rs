@@ -1,11 +1,12 @@
-use crate::{dims::Dims, dyn_matrix::DynMatrix, element::Element};
+use crate::wrappers::*;
+use jnickg_imaging::element::Element;
 use serde_json::json;
 use utoipa::{
     openapi::{ArrayBuilder, ObjectBuilder, RefOr, Schema, SchemaType},
     ToSchema,
 };
 
-impl<'__s, T: Element> ToSchema<'__s> for DynMatrix<T> {
+impl<'__s, T: Element> ToSchema<'__s> for WrappedDynMatrix<T> {
     fn schema() -> (&'__s str, RefOr<Schema>) {
         (
             "Matrix",
@@ -32,7 +33,7 @@ impl<'__s, T: Element> ToSchema<'__s> for DynMatrix<T> {
     }
 }
 
-impl<'__s> ToSchema<'__s> for Dims {
+impl<'__s> ToSchema<'__s> for WrappedDims {
     fn schema() -> (&'__s str, RefOr<Schema>) {
         (
             "Dims",

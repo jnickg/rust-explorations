@@ -5,7 +5,6 @@ use futures_util::AsyncReadExt;
 use image::{DynamicImage, ImageFormat};
 use mongodb::{
     bson::{doc, Bson, Document},
-    options::GridFsBucketOptions,
     Collection,
 };
 use rayon::prelude::*;
@@ -124,11 +123,8 @@ pub fn generate_tiles_for_pyramid(
     for (pyramid_level, level_tiles) in compressed_level_tiles.iter().enumerate() {
         let mut tile_docs = Vec::new();
         for (t_idx, tile) in level_tiles.iter().enumerate() {
-            let tile_name_base = format!(
-                "{}_L{}_T{}",
-                pyramid_uuid, pyramid_level, t_idx
-            );
-            
+            let tile_name_base = format!("{}_L{}_T{}", pyramid_uuid, pyramid_level, t_idx);
+
             let mut upload_stream = bucket.open_upload_stream(&tile_name_base, None);
             match block_on(upload_stream.write_all(tile)) {
                 Ok(_) => (),

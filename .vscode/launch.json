@@ -4,8 +4,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug (jnickg_rust_explorations)",
-            "program": "${workspaceRoot}/target/debug/jnickg_rust_explorations",
+            "name": "Debug (jnickg_tile_server)",
+            "program": "${workspaceRoot}/target/debug/jnickg_tile_server",
             "args": [
                 "--host", "localhost",
                 "--user", "admin",

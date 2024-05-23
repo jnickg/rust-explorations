@@ -22,18 +22,18 @@ services:
         container_name: mongodb
         restart: always
         env_file:
-            - ./secrets/mongo-env.txt
+            - ./server/secrets/mongo-env.txt
         ports:
             - 27017:27017
         volumes:
-            - ./mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
-            - ./mongo/db:/data/db
+            - ./server/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+            - ./server/mongo/db:/data/db
         secrets:
             - mongo-user
             - mongo-pw
 
 secrets:
     mongo-pw:
-        file: ./secrets/mongo-pw.txt
+        file: ./server/secrets/mongo-pw.txt
     mongo-user:
-        file: ./secrets/mongo-user.txt
+        file: ./server/secrets/mongo-user.txt

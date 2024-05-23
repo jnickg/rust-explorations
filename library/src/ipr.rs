@@ -1,5 +1,5 @@
-use std::io::Cursor;
 use image::{DynamicImage, GenericImageView, ImageFormat};
+use std::io::Cursor;
 
 use crate::dims::{Cols, Dims, HasDims, Rows};
 use crate::dyn_matrix::DynMatrix;

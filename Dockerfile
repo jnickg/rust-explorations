@@ -5,6 +5,6 @@ COPY . /tiler
 WORKDIR /tiler
 RUN rustup override set nightly
 RUN cargo build --release
-CMD ["/tiler/target/release/jnickg_rust_explorations"]
+CMD ["/tiler/target/release/jnickg_tile_server"]
 
 EXPOSE 3000

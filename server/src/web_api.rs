@@ -1,20 +1,21 @@
-use axum::body::Body;
+use ::axum::body::Body;
 use futures_util::{io::AsyncWriteExt, AsyncReadExt, StreamExt};
-use image::{DynamicImage, ImageFormat};
+use image::ImageFormat;
 use mongodb::{
     bson::{doc, Document},
     Collection,
 };
 use std::{collections::HashMap, io::Cursor};
 
+use ::utoipa::OpenApi;
 use askama::Template;
 use jnickg_imaging::{
-    dims::{Dims, HasDims},
+    dims::HasDims,
     dyn_matrix::DynMatrix,
     ipr::{self, HasImageProcessingRoutines},
 };
-use utoipa::OpenApi;
 
+use crate::wrappers::*;
 use crate::*;
 
 macro_rules! debug_print {
@@ -51,8 +52,8 @@ macro_rules! debug_print {
     ),
     components(
         schemas(
-            DynMatrix<f64>,
-            Dims
+            WrappedDynMatrix<f64>,
+            WrappedDims
         )
     ),
     tags(
@@ -70,10 +71,7 @@ pub struct IndexTemplate<'a> {
 }
 
 impl<'a> IndexTemplate<'a> {
-    fn new(
-        matrices: &'a HashMap<String, DynMatrix<f64>>,
-        images: &'a Vec<String>,
-    ) -> Self {
+    fn new(matrices: &'a HashMap<String, DynMatrix<f64>>, images: &'a Vec<String>) -> Self {
         Self {
             matrices,
             images,
@@ -275,9 +273,9 @@ pub async fn post_matrix_with_name(
     Path(name): Path<String>,
     request: Request,
 ) -> Response {
-    let mat_from_req = DynMatrix::<f64>::from_request(request, &app_state).await;
+    let mat_from_req = WrappedDynMatrix::<f64>::from_request(request, &app_state).await;
     match mat_from_req {
-        Ok(new_mat) => {
+        Ok(WrappedDynMatrix(new_mat)) => {
             let app = &mut app_state.write().await;
             match app.matrices.contains_key(&name) {
                 true => (
@@ -313,7 +311,7 @@ pub async fn post_matrix_with_name(
 pub async fn get_matrix(State(app_state): AppState, Path(name): Path<String>) -> Response {
     let app = &mut app_state.read().await;
     match app.matrices.get(&name) {
-        Some(mat) => (StatusCode::OK, mat.clone()).into_response(),
+        Some(mat) => (StatusCode::OK, WrappedDynMatrix(mat.clone())).into_response(),
         None => (
             StatusCode::NOT_FOUND,
             format!("Matrix {} not found.\n", name),
@@ -335,7 +333,7 @@ pub async fn get_matrix_dims(State(app_state): AppState, Path(name): Path<String
     match app.matrices.get(&name) {
         Some(mat) => {
             let dims = mat.dims();
-            (StatusCode::OK, dims).into_response()
+            (StatusCode::OK, WrappedDims(dims)).into_response()
         }
         None => (
             StatusCode::NOT_FOUND,
@@ -363,18 +361,18 @@ pub async fn put_matrix(
     Path(name): Path<String>,
     request: Request,
 ) -> Response {
-    let mat_from_req = DynMatrix::<f64>::from_request(request, &app_state).await;
+    let mat_from_req = WrappedDynMatrix::<f64>::from_request(request, &app_state).await;
     match mat_from_req {
-        Ok(new_mat) => {
+        Ok(WrappedDynMatrix(new_mat)) => {
             let app = &mut app_state.write().await;
             match app.matrices.contains_key(&name) {
                 true => {
                     app.matrices.insert(name.clone(), new_mat.clone());
-                    (StatusCode::OK, new_mat).into_response()
+                    (StatusCode::OK, WrappedDynMatrix(new_mat)).into_response()
                 }
                 false => {
                     app.matrices.insert(name.clone(), new_mat.clone());
-                    (StatusCode::CREATED, new_mat).into_response()
+                    (StatusCode::CREATED, WrappedDynMatrix(new_mat)).into_response()
                 }
             }
         }
@@ -400,7 +398,7 @@ pub async fn put_matrix(
 pub async fn delete_matrix(State(app_state): AppState, Path(name): Path<String>) -> Response {
     let app = &mut app_state.write().await;
     match app.matrices.remove(&name) {
-        Some(mat) => (StatusCode::OK, mat).into_response(),
+        Some(mat) => (StatusCode::OK, WrappedDynMatrix(mat)).into_response(),
         None => (
             StatusCode::NOT_FOUND,
             format!("Matrix {} not found.\n", name),
@@ -426,7 +424,7 @@ pub async fn post_matrix_multiply(
     let mat2 = app.matrices.get(&name2).unwrap();
     let result = mat1 * mat2;
     // Return result in body
-    (StatusCode::OK, result.clone()).into_response()
+    (StatusCode::OK, WrappedDynMatrix(result.clone())).into_response()
 }
 
 #[utoipa::path(
@@ -446,7 +444,7 @@ pub async fn post_matrix_add(
     let mat2 = app.matrices.get(&name2).unwrap();
     let result = mat1 + mat2;
     // Return result in body
-    (StatusCode::OK, result.clone()).into_response()
+    (StatusCode::OK, WrappedDynMatrix(result.clone())).into_response()
 }
 
 #[utoipa::path(
@@ -466,7 +464,7 @@ pub async fn post_matrix_subtract(
     let mat2 = app.matrices.get(&name2).unwrap();
     let result = mat1 - mat2;
     // Return result in body
-    (StatusCode::OK, result.clone()).into_response()
+    (StatusCode::OK, WrappedDynMatrix(result.clone())).into_response()
 }
 
 #[utoipa::path(
@@ -870,9 +868,7 @@ pub async fn get_image(
         builder = builder.header("Content-Encoding", "br");
     }
 
-    builder
-        .body(Body::from(image_bytes))
-        .unwrap()
+    builder.body(Body::from(image_bytes)).unwrap()
 }
 
 #[utoipa::path(
