@@ -5,9 +5,11 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use gloo::file::callbacks::FileReader;
 use gloo::file::File;
-use web_sys::{DragEvent, Event, FileList, HtmlInputElement};
-use yew::{html, Callback, Component, Context, Html, TargetCast};
 use image::DynamicImage;
+use web_sys::{
+    DragEvent, Event, FileList, HtmlInputElement, Request, RequestInit, RequestMode, Response,
+};
+use yew::{html, Callback, Component, Context, Html, TargetCast};
 
 struct FileDetails {
     name: String,
@@ -45,8 +47,9 @@ impl Component for App {
             Msg::PyramidTiles(pyramid_id) => {
                 let tile_hierarchy: Vec<Vec<DynamicImage>> = Vec::default();
                 // TODO fetch each tile, fetch them and put them into the tile hierarchy
-                
-                self.pyramid_ids.insert(pyramid_id.clone(), Some(tile_hierarchy));
+
+                self.pyramid_ids
+                    .insert(pyramid_id.clone(), Some(tile_hierarchy));
                 true
             }
             Msg::Pyramid(pyramid_id) => {
@@ -64,9 +67,10 @@ impl Component for App {
                 });
                 self.readers.remove(&file_name);
                 // TODO POST to backend the image to <hostname>:<port>/api/v1/pyramid with the
-                // image data and mime type.  Use a callback that handles the return of that
+                // image data and mime type. Use a callback that handles the return of that
                 // request, parses the JSON for the pyramid ID, and sends an appropriate message
                 // like how we send link.send_message below
+
                 true
             }
             Msg::Files(files) => {

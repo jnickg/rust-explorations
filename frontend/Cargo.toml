@@ -19,4 +19,14 @@ image = "0.25.1"
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["File", "DragEvent", "DataTransfer"]
+features = [
+    "File",
+    "DragEvent",
+    "DataTransfer",
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "Window",
+]
