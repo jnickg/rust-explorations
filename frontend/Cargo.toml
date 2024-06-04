@@ -29,6 +29,7 @@ features = [
     "File",
     "Headers",
     "HtmlCanvasElement",
+    "HtmlImageElement",
     "Request",
     "RequestInit",
     "RequestMode",

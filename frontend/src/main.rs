@@ -6,8 +6,9 @@ use base64::Engine;
 use gloo::file::callbacks::FileReader;
 use gloo::file::File;
 use image::DynamicImage;
+use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{
-    DragEvent, Event, FileList, HtmlInputElement, wasm_bindgen::JsCast
+    wasm_bindgen::JsCast, CanvasRenderingContext2d, DragEvent, Event, FileList, HtmlInputElement,
 };
 use yew::{html, Callback, Component, Context, Html, TargetCast, WheelEvent};
 
@@ -17,6 +18,7 @@ struct FileDetails {
     data: Vec<u8>,
 }
 
+#[derive(Clone, Copy, Debug)]
 struct View2D {
     location: (f64, f64),
     zoom: f64,
@@ -112,8 +114,11 @@ impl Component for App {
                 true
             }
             Msg::Pan((dx, dy)) => {
-                self.current_view.location
-                    = (self.current_view.location.0 + dx, self.current_view.location.1 + dy);
+                web_sys::console::log_1(&format!("Panning by: ({}, {})", dx, dy).into());
+                self.current_view.location = (
+                    self.current_view.location.0 + dx,
+                    self.current_view.location.1 + dy,
+                );
                 self.render_canvas(ctx);
                 true
             }
@@ -195,38 +200,120 @@ impl Component for App {
 }
 
 impl App {
-    fn render_canvas(&self, ctx: &Context<Self>) {
+    fn get_canvas_ctx(
+        &self,
+    ) -> Result<
+        (
+            web_sys::HtmlCanvasElement,
+            web_sys::CanvasRenderingContext2d,
+        ),
+        (),
+    > {
         let canvas = web_sys::window()
+            .ok_or(())?
+            .document()
+            .ok_or(())?
+            .get_element_by_id("viewer-canvas")
+            .ok_or(())?
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .map_err(|_| ())?;
+        let ctx = canvas
+            .get_context("2d")
+            .map_err(|_| ())?
+            .ok_or(())?
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()
+            .map_err(|_| ())?;
+        Ok((canvas, ctx))
+    }
+
+    fn render_canvas(&self, ctx: &Context<Self>) {
+        let (canvas, canvas_ctx) = match self.get_canvas_ctx() {
+            Ok((canvas, ctx)) => (canvas, ctx),
+            Err(_) => return,
+        };
+
+        // Clear the canvas
+        canvas_ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+
+        // Draw the image
+        let selected_image = if let Some(selected_image) = self.selected_image.as_ref() {
+            selected_image
+        } else {
+            // Draw a placeholder
+            canvas_ctx.set_fill_style(&"black".into());
+            canvas_ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+            return;
+        };
+
+        let selected_image_file_details =
+                match self.files.iter().find(|file| file.name == *selected_image) {
+                    Some(file) => file,
+                    None => return,
+                };
+        let image_data = &selected_image_file_details.data;
+        // createImageBitmap is not available in web-sys yet, so we have to use the
+        // Image constructor instead
+        let image = web_sys::window()
             .unwrap()
             .document()
             .unwrap()
-            .get_element_by_id("viewer-canvas")
-            .unwrap()
-            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .create_element("img")
             .unwrap();
-        let ctx = canvas
-            .get_context("2d")
-            .unwrap()
-            .unwrap()
-            .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        image
+            .set_attribute(
+                "src",
+                &format!(
+                    "data:{};base64,{}",
+                    selected_image_file_details.file_type,
+                    STANDARD.encode(image_data)
+                ),
+            )
             .unwrap();
+        let image = image.dyn_into::<web_sys::HtmlImageElement>().unwrap();
+        canvas.set_width(image.width());
+        canvas.set_height(image.height());
+        let current_view = self.current_view;
+        // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
+        // This is what we'd do by default:
+        //   let dx = 0.0;
+        //   let dy = 0.0;
+        //   let dw = canvas.width() as f64;
+        //   let dh = canvas.height() as f64;
+        //   let sx = 0.0;
+        //   let sy = 0.0;
+        //   let sw = image.width() as f64;
+        //   let sh = image.height() as f64;
+        // But we want to pan and zoom, so we need to adjust the values
+        let dx = current_view.location.0;
+        let dy = current_view.location.1;
+        let dw = canvas.width() as f64 * current_view.zoom;
+        let dh = canvas.height() as f64 * current_view.zoom;
+        let sx = 0.0;
+        let sy = 0.0;
+        let sw = image.width() as f64;
+        let sh = image.height() as f64;
 
-        // Clear the canvas
-        ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
-
-        // Draw the image
-        if let Some(selected_image) = self.selected_image.as_ref() {
-            web_sys::console::log_1(&format!("TODO draw image: {}", selected_image).into());
-        } else {
-            // Draw a placeholder
-            ctx.set_fill_style(&"black".into());
-            ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+        match canvas_ctx
+            .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                &image, sx, sy, sw, sh, dx, dy, dw, dh,
+            ) {
+            Ok(_) => {}
+            Err(e) => {
+                web_sys::console::log_1(&format!("Error drawing image: {:?}", e).into());
+            }
         }
     }
 
     fn preview_file(&self, ctx: &Context<Self>, file: &FileDetails) -> Html {
-        let is_selected = self.selected_image.as_ref().map_or(false, |selected| selected == &file.name);
-        let class_str = if is_selected { "preview-tile selected" } else { "preview-tile" };
+        let is_selected = self
+            .selected_image
+            .as_ref()
+            .map_or(false, |selected| selected == &file.name);
+        let class_str = if is_selected {
+            "preview-tile selected"
+        } else {
+            "preview-tile"
+        };
         html! {
             <div
                 class={class_str}
