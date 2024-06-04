@@ -69,10 +69,18 @@
     background: #313737;
     border-radius: 1rem;
   }
+  .selected {
+    border: 2px solid #fcfcfc;
+  }
   
   .preview-media {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
+  }
+
+  #viewer-canvas {
+    width: 100%;
+    height: auto;
   }

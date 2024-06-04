@@ -7,9 +7,9 @@ use gloo::file::callbacks::FileReader;
 use gloo::file::File;
 use image::DynamicImage;
 use web_sys::{
-    DragEvent, Event, FileList, HtmlInputElement, Request, RequestInit, RequestMode, Response,
+    DragEvent, Event, FileList, HtmlInputElement, wasm_bindgen::JsCast
 };
-use yew::{html, Callback, Component, Context, Html, TargetCast};
+use yew::{html, Callback, Component, Context, Html, TargetCast, WheelEvent};
 
 struct FileDetails {
     name: String,
@@ -17,17 +17,28 @@ struct FileDetails {
     data: Vec<u8>,
 }
 
+struct View2D {
+    location: (f64, f64),
+    zoom: f64,
+}
+
 pub enum Msg {
     Loaded(String, String, Vec<u8>),
     Files(Vec<File>),
+    Pan((f64, f64)),
     Pyramid(String),
     PyramidTiles(String),
+    Zoom(f64),
+    SelectImage(String),
 }
 
 pub struct App {
     readers: HashMap<String, FileReader>,
     files: Vec<FileDetails>,
+    file_to_pyramid_id: HashMap<String, String>,
     pyramid_ids: HashMap<String, Option<Vec<Vec<DynamicImage>>>>,
+    selected_image: Option<String>,
+    current_view: View2D,
 }
 
 impl Component for App {
@@ -38,7 +49,13 @@ impl Component for App {
         Self {
             readers: HashMap::default(),
             files: Vec::default(),
+            file_to_pyramid_id: HashMap::default(),
             pyramid_ids: HashMap::default(),
+            selected_image: None,
+            current_view: View2D {
+                location: (0.0, 0.0),
+                zoom: 1.0,
+            },
         }
     }
 
@@ -94,13 +111,36 @@ impl Component for App {
                 }
                 true
             }
+            Msg::Pan((dx, dy)) => {
+                self.current_view.location
+                    = (self.current_view.location.0 + dx, self.current_view.location.1 + dy);
+                self.render_canvas(ctx);
+                true
+            }
+            Msg::Zoom(dz) => {
+                self.current_view.zoom *= 1.0 + dz / 1000.0;
+                self.render_canvas(ctx);
+                true
+            }
+            Msg::SelectImage(file_name) => {
+                // Console log
+                web_sys::console::log_1(&format!("Selected image: {}", file_name).into());
+                // Then set the selected image to the file name
+                self.selected_image = Some(file_name);
+                self.current_view = View2D {
+                    location: (0.0, 0.0),
+                    zoom: 1.0,
+                };
+                self.render_canvas(ctx);
+                true
+            }
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div id="wrapper">
-                <p id="title">{ "Upload Your Files To The Cloud" }</p>
+                <p id="title">{ "Load file(s)" }</p>
                 <label for="file-upload">
                     <div
                         id="drop-container"
@@ -129,18 +169,74 @@ impl Component for App {
                         Self::upload_files(input.files())
                     })}
                 />
+                <p id="title">{ "Select an image" }</p>
+                <p>{ "Click on an image to view it in the viewer, then scroll down to view it." }</p>
                 <div id="preview-area">
-                    { for self.files.iter().map(Self::view_file) }
+                    { for self.files.iter().map(
+                        |file| self.preview_file(ctx, file)
+                    ) }
                 </div>
+                <p id="title">{ "Image Viewer" }</p>
+                <p>{ "Use the mouse wheel to zoom, and click and drag to pan" }</p>
+                <canvas
+                    id="viewer-canvas"
+                    onwheel={ctx.link().callback(|event: WheelEvent| {
+                        event.prevent_default();
+                        Msg::Zoom(event.delta_y())
+                    })}
+                    ondrag={ctx.link().callback(|event: DragEvent| {
+                        event.prevent_default();
+                        Msg::Pan((event.movement_x() as f64, event.movement_y() as f64))
+                    })}
+                />
             </div>
         }
     }
 }
 
 impl App {
-    fn view_file(file: &FileDetails) -> Html {
+    fn render_canvas(&self, ctx: &Context<Self>) {
+        let canvas = web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .get_element_by_id("viewer-canvas")
+            .unwrap()
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .unwrap();
+        let ctx = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()
+            .unwrap();
+
+        // Clear the canvas
+        ctx.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+
+        // Draw the image
+        if let Some(selected_image) = self.selected_image.as_ref() {
+            web_sys::console::log_1(&format!("TODO draw image: {}", selected_image).into());
+        } else {
+            // Draw a placeholder
+            ctx.set_fill_style(&"black".into());
+            ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+        }
+    }
+
+    fn preview_file(&self, ctx: &Context<Self>, file: &FileDetails) -> Html {
+        let is_selected = self.selected_image.as_ref().map_or(false, |selected| selected == &file.name);
+        let class_str = if is_selected { "preview-tile selected" } else { "preview-tile" };
         html! {
-            <div class="preview-tile">
+            <div
+                class={class_str}
+                onclick={
+                    let file_name = file.name.clone();
+                    ctx.link().callback(move |_| {
+                        Msg::SelectImage(file_name.clone())
+                    })
+                }
+            >
                 <p class="preview-name">{ format!("{}", file.name) }</p>
                 <div class="preview-media">
                     if file.file_type.contains("image") {
