@@ -147,7 +147,6 @@ pub fn generate_tiles_for_pyramid(
                 "mime_type": dest_format.to_mime_type(),
                 "brotli": true,
             };
-            dbg!(&image_doc);
 
             match block_on(db.collection("images").insert_one(image_doc, None)) {
                 Ok(_) => (),

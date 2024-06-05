@@ -27,7 +27,6 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    dbg!(&args);
     let image = match image::open(&args.input) {
         Ok(image) => image,
         Err(_e) => {

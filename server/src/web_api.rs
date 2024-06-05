@@ -585,7 +585,6 @@ pub async fn post_image(State(app_state): AppState, request: Request) -> Respons
         "image": image_id,
         "mime_type": format.to_mime_type(),
     };
-    dbg!(&doc);
 
     match db.collection("images").insert_one(doc, None).await {
         Ok(_) => (),
@@ -745,7 +744,6 @@ pub async fn get_image(
                 .into_response();
         }
     };
-    dbg!(&image_doc);
 
     let image_id = image_doc.get("image");
     if image_id.is_none() {
@@ -756,7 +754,6 @@ pub async fn get_image(
             .into_response();
     }
     let image_id = image_id.unwrap();
-    dbg!(&image_id);
 
     let mime_type = match image_doc.get("mime_type") {
         Some(m) => m.as_str().unwrap(),
@@ -1020,7 +1017,6 @@ pub async fn put_image(
         "image": image_id,
         "mime_type": format.to_mime_type(),
     };
-    dbg!(&doc);
 
     // Now that we have a handle to the uploaded ID and created a document, close out the
     // upload to latch it.
@@ -1303,7 +1299,6 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
             "image": image_id,
             "mime_type": format.to_mime_type(),
         };
-        dbg!(&doc);
 
         let result = match db.collection("images").insert_one(doc, None).await {
             Ok(r) => r,
