@@ -10,7 +10,7 @@ use wasm_bindgen::UnwrapThrowExt;
 use web_sys::{
     wasm_bindgen::JsCast, CanvasRenderingContext2d, DragEvent, Event, FileList, HtmlInputElement,
 };
-use yew::{html, Callback, Component, Context, Html, TargetCast, WheelEvent};
+use yew::{html, Callback, Component, Context, Html, MouseEvent, TargetCast, WheelEvent};
 
 struct FileDetails {
     name: String,
@@ -20,14 +20,31 @@ struct FileDetails {
 
 #[derive(Clone, Copy, Debug)]
 struct View2D {
-    location: (f64, f64),
+    /// (x, y) - The location of our view over an image, in unit coordinates.
+    /// 
+    /// (0.0, 0.0) is the top-left corner of the image, and (1.0, 1.0) is the bottom-right corner.
+    unit_loc: (f64, f64),
+
+    /// The zoom level of our view.
     zoom: f64,
+    is_panning: bool
+}
+
+impl Default for View2D {
+    fn default() -> Self {
+        Self {
+            unit_loc: (0.5, 0.5),
+            zoom: 1.0,
+            is_panning: false,
+        }
+    }
 }
 
 pub enum Msg {
     Loaded(String, String, Vec<u8>),
     Files(Vec<File>),
     Pan((f64, f64)),
+    PanState(bool),
     Pyramid(String),
     PyramidTiles(String),
     Zoom(f64),
@@ -54,10 +71,7 @@ impl Component for App {
             file_to_pyramid_id: HashMap::default(),
             pyramid_ids: HashMap::default(),
             selected_image: None,
-            current_view: View2D {
-                location: (0.0, 0.0),
-                zoom: 1.0,
-            },
+            current_view: View2D::default(),
         }
     }
 
@@ -114,12 +128,22 @@ impl Component for App {
                 true
             }
             Msg::Pan((dx, dy)) => {
+                if !self.current_view.is_panning {
+                    return false;
+                }
                 web_sys::console::log_1(&format!("Panning by: ({}, {})", dx, dy).into());
-                self.current_view.location = (
-                    self.current_view.location.0 + dx,
-                    self.current_view.location.1 + dy,
-                );
+                let (x_unit, y_unit) = self.current_view.unit_loc;
+                let dx_unit = dx / self.current_view.zoom / self.get_canvas_ctx().unwrap().0.width() as f64;
+                let dy_unit = dy / self.current_view.zoom / self.get_canvas_ctx().unwrap().0.height() as f64;
+                let x_unit = (x_unit + dx_unit).max(0.0).min(1.0);
+                let y_unit = (y_unit + dy_unit).max(0.0).min(1.0);
+                self.current_view.unit_loc = (x_unit, y_unit);
+
                 self.render_canvas(ctx);
+                true
+            }
+            Msg::PanState(is_panning) => {
+                self.current_view.is_panning = is_panning;
                 true
             }
             Msg::Zoom(dz) => {
@@ -132,10 +156,7 @@ impl Component for App {
                 web_sys::console::log_1(&format!("Selected image: {}", file_name).into());
                 // Then set the selected image to the file name
                 self.selected_image = Some(file_name);
-                self.current_view = View2D {
-                    location: (0.0, 0.0),
-                    zoom: 1.0,
-                };
+                self.current_view = View2D::default();
                 self.render_canvas(ctx);
                 true
             }
@@ -187,9 +208,12 @@ impl Component for App {
                     id="viewer-canvas"
                     onwheel={ctx.link().callback(|event: WheelEvent| {
                         event.prevent_default();
-                        Msg::Zoom(event.delta_y())
+                        Msg::Zoom(-event.delta_y())
                     })}
-                    ondrag={ctx.link().callback(|event: DragEvent| {
+                    onmousedown={ctx.link().callback(|_| Msg::PanState(true))}
+                    onmouseup={ctx.link().callback(|_| Msg::PanState(false))}
+                    onmouseleave={ctx.link().callback(|_| Msg::PanState(false))}
+                    onmousemove={ctx.link().callback(|event: MouseEvent| {
                         event.prevent_default();
                         Msg::Pan((event.movement_x() as f64, event.movement_y() as f64))
                     })}
@@ -250,6 +274,8 @@ impl App {
                     Some(file) => file,
                     None => return,
                 };
+        // TODO based on zoom level, we should be able to select the appropriate level of the
+        // pyramid to render, rather than grabbing the L0 (full resolution) image every time.
         let image_data = &selected_image_file_details.data;
         // createImageBitmap is not available in web-sys yet, so we have to use the
         // Image constructor instead
@@ -274,24 +300,25 @@ impl App {
         canvas.set_height(image.height());
         let current_view = self.current_view;
         // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
-        // This is what we'd do by default:
-        //   let dx = 0.0;
-        //   let dy = 0.0;
-        //   let dw = canvas.width() as f64;
-        //   let dh = canvas.height() as f64;
+        // This is what we'd do for typical pan/zoom
+        //   let (dx, dy) = current_view.location;
+        //   let dw = canvas.width() as f64 * current_view.zoom;
+        //   let dh = canvas.height() as f64 * current_view.zoom;
         //   let sx = 0.0;
         //   let sy = 0.0;
         //   let sw = image.width() as f64;
         //   let sh = image.height() as f64;
-        // But we want to pan and zoom, so we need to adjust the values
-        let dx = current_view.location.0;
-        let dy = current_view.location.1;
+        // But we use the unit location instead, and that point represents the _center_ of the view,
+        // so we need to adjust the dx and dy accordingly.
+        let (dx_unit, dy_unit) = current_view.unit_loc;
         let dw = canvas.width() as f64 * current_view.zoom;
         let dh = canvas.height() as f64 * current_view.zoom;
         let sx = 0.0;
         let sy = 0.0;
         let sw = image.width() as f64;
         let sh = image.height() as f64;
+        let dx = (dx_unit - 0.5) * sw * current_view.zoom;
+        let dy = (dy_unit - 0.5) * sh * current_view.zoom;
 
         match canvas_ctx
             .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
