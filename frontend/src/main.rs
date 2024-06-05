@@ -468,8 +468,8 @@ impl App {
             }
         };
 
-        canvas.set_width(image.width());
-        canvas.set_height(image.height());
+        canvas.set_width(selected_image_file_details.image.width());
+        canvas.set_height(selected_image_file_details.image.height());
         // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
         // This is what we'd do for typical pan/zoom
         //   let (dx, dy) = current_view.location;
