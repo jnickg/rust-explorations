@@ -90,7 +90,6 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    dbg!(&args);
 
     let mut state: RuntimeData = RuntimeData::new();
 
