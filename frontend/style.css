@@ -13,8 +13,8 @@
   
   img,
   video {
-    max-width: 300px;
-    max-height: 500px;
+    max-width: 150px;
+    max-height: 250px;
   }
   
   p {
@@ -83,4 +83,7 @@
   #viewer-canvas {
     width: 100%;
     height: auto;
+    border: 2px solid black;
+    border-radius: 1rem;
+    background-color: black;
   }

@@ -61,20 +61,21 @@ struct CanvasRoiPair {
 }
 
 /// Gets the pyramid level and re-scaled zoom factor, for the given effective zoom
-/// 
+///
 /// 1.0 means full resolution, and 2.0 means we are zoomed in.
 /// For every factor of half, we should increase pyramid level by 1. Anything above 1.0
 /// should be considered as zoomed in.
-/// 
+///
 /// Rescaled zoom means "relative zoom you need to use on the returned pyramid level to
 /// achieve the given effective zoom"
 fn level_and_relative_zoom_for(effective_zoom: f64) -> (u16, f64) {
-    let mut level = 0;
-    let mut relative_zoom = effective_zoom;
-    while relative_zoom < 1.0 {
-        relative_zoom *= 2.0;
-        level += 1;
-    }
+    let effective_zoom = effective_zoom + f64::EPSILON; // Prevent dbz
+                                                        // This computes the nearest _larger_ pyramid level, so that the browser only downsamples
+                                                        // pyramid levels. We should only upsample on canvas when the user zooms into L0.
+    let level = (1.0 / effective_zoom).log2().floor() as u16;
+    // Compute how to achieve the desired effective zoom based on the level we've chosen
+    let level_zoom = 0.5_f64.powi(level as i32);
+    let relative_zoom = effective_zoom / level_zoom;
     (level, relative_zoom)
 }
 
@@ -101,7 +102,7 @@ impl View2D {
     /// can (and can't) be shown in destination space. Based on the source dimensions and re-scaled zoom
     /// factor, we are able to determine whether the entire source image can be shown in the destination.
     /// If it can't, the source ROI is cropped to fit within the aspect ratio of the destination.
-    /// 
+    ///
     /// This function ensures that [`View2D::unit_loc`], remains in the center of the destination
     ///
     /// # Returns
@@ -117,11 +118,23 @@ impl View2D {
             w: dest_w,
             h: dest_h,
         }: Dims,
-        use_relative_zoom: bool
+        use_relative_zoom: bool,
     ) -> CanvasRoiPair {
-        let (_, relative_zoom) = if use_relative_zoom { level_and_relative_zoom_for(self.zoom) } else { (0u16, self.zoom) };
-        web_sys::console::log_1(&format!("Relative zoom: {}, effective: {}", relative_zoom, self.zoom).into());
-        web_sys::console::log_1(&format!("Src dims: ({}, {}), dest dims: ({}, {})", src_w, src_h, dest_w, dest_h).into());
+        let (_, relative_zoom) = if use_relative_zoom {
+            level_and_relative_zoom_for(self.zoom)
+        } else {
+            (0u16, self.zoom)
+        };
+        web_sys::console::log_1(
+            &format!("Relative zoom: {}, effective: {}", relative_zoom, self.zoom).into(),
+        );
+        web_sys::console::log_1(
+            &format!(
+                "Src dims: ({}, {}), dest dims: ({}, {})",
+                src_w, src_h, dest_w, dest_h
+            )
+            .into(),
+        );
         // Center of view in source image coordinates
         let csx = self.unit_loc.0 * src_w;
         let csy = self.unit_loc.1 * src_h;
@@ -153,8 +166,18 @@ impl View2D {
         let sh = dh / relative_zoom;
 
         let result = CanvasRoiPair {
-            s: Roi2D { x: sx, y: sy, w: sw, h: sh },
-            d: Roi2D { x: dx, y: dy, w: dw, h: dh },
+            s: Roi2D {
+                x: sx,
+                y: sy,
+                w: sw,
+                h: sh,
+            },
+            d: Roi2D {
+                x: dx,
+                y: dy,
+                w: dw,
+                h: dh,
+            },
         };
         web_sys::console::log_1(&format!("ROIs: {:?}", result).into());
         result
@@ -239,12 +262,11 @@ impl Component for App {
                 // SHORT TERM:
                 // Fetch all the pyramid level images and cache them locally when available.
                 //
-                //
-                // Example JSON:
+                // Example JSON (paste into separate doc and prettify)
                 // {"image_docs":[{"$oid":"6660de9402834efab622c479"},{"$oid":"6660de9402834efab622c47a"},{"$oid":"6660de9402834efab622c47b"},{"$oid":"6660de9402834efab622c47c"},{"$oid":"6660de9402834efab622c47d"},{"$oid":"6660de9402834efab622c47e"},{"$oid":"6660de9402834efab622c47f"},{"$oid":"6660de9402834efab622c480"},{"$oid":"6660de9402834efab622c481"},{"$oid":"6660de9402834efab622c482"},{"$oid":"6660de9402834efab622c483"},{"$oid":"6660de9402834efab622c484"}],"image_files":[{"$oid":"6660de9402834efab622c460"},{"$oid":"6660de9402834efab622c463"},{"$oid":"6660de9402834efab622c465"},{"$oid":"6660de9402834efab622c467"},{"$oid":"6660de9402834efab622c469"},{"$oid":"6660de9402834efab622c46b"},{"$oid":"6660de9402834efab622c46d"},{"$oid":"6660de9402834efab622c46f"},{"$oid":"6660de9402834efab622c471"},{"$oid":"6660de9402834efab622c473"},{"$oid":"6660de9402834efab622c475"},{"$oid":"6660de9402834efab622c477"}],"image_names":["1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L0","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L1","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L2","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L3","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L4","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L5","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L6","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L7","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L8","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L9","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L10","1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L11"],"image_urls":["/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L0","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L1","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L2","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L3","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L4","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L5","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L6","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L7","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L8","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L9","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L10","/api/v1/image/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221_L11"],"mime_type":"image/jpeg","tiles":"todo","url":"/api/v1/pyramid/1e1a4169-5bbf-4eed-bc3c-51a2a81d5221","uuid":"1e1a4169-5bbf-4eed-bc3c-51a2a81d5221"}
                 //
-                // Using that JSON, grab the image_urls and fetch the images, send Msg::PyramidLevel for each
-                // image.
+                // Using that JSON structure we need to grab the `image_urls` and fetch the images then
+                // send Msg::PyramidLevel for each image when received.
                 let image_urls = pyramid_json.get("image_urls").unwrap().as_array().unwrap();
                 self.pyramid_id_to_cached_pyramid_images
                     .insert(pyramid_id.clone(), vec![None; image_urls.len()]);
@@ -307,6 +329,7 @@ impl Component for App {
             Msg::Loaded(file_name, file_type, data) => {
                 // analogous curl:
                 //      `curl --data-binary "@helldivers.jpg" -H "Content-Type: image/jpeg" -X POST http://localhost:3000/api/v1/pyramid`
+                web_sys::console::log_1(&format!("file_type: {}", file_type).into());
                 let data_as_jsvalue = JsValue::from(Uint8Array::from(data.as_slice()));
                 let request = Request::new_with_str_and_init(
                     "http://localhost:8080/api/v1/pyramid",
@@ -483,22 +506,28 @@ impl Component for App {
                         |file| self.preview_file(ctx, file)
                     ) }
                 </div>
-                <p id="title">{ "Image Viewer" }</p>
-                <p>{ "Use the mouse wheel to zoom, and click and drag to pan" }</p>
-                <canvas
-                    id="viewer-canvas"
-                    onwheel={ctx.link().callback(|event: WheelEvent| {
-                        event.prevent_default();
-                        Msg::ViewZoom(-event.delta_y())
-                    })}
-                    onmousedown={ctx.link().callback(|_| Msg::ViewPanState(true))}
-                    onmouseup={ctx.link().callback(|_| Msg::ViewPanState(false))}
-                    onmouseleave={ctx.link().callback(|_| Msg::ViewPanState(false))}
-                    onmousemove={ctx.link().callback(|event: MouseEvent| {
-                        event.prevent_default();
-                        Msg::ViewPan((-event.movement_x() as f64, -event.movement_y() as f64))
-                    })}
-                />
+                <div id="viewier-area">
+                    <div class="info">
+                        <p id="title">{ "Image Viewer" }</p>
+                        <p>{ "Use the mouse wheel to zoom, and click and drag to pan" }</p>
+                    </div>
+                    <div class="content">
+                        <canvas
+                            id="viewer-canvas"
+                            onwheel={ctx.link().callback(|event: WheelEvent| {
+                                event.prevent_default();
+                                Msg::ViewZoom(-event.delta_y())
+                            })}
+                            onmousedown={ctx.link().callback(|_| Msg::ViewPanState(true))}
+                            onmouseup={ctx.link().callback(|_| Msg::ViewPanState(false))}
+                            onmouseleave={ctx.link().callback(|_| Msg::ViewPanState(false))}
+                            onmousemove={ctx.link().callback(|event: MouseEvent| {
+                                event.prevent_default();
+                                Msg::ViewPan((-event.movement_x() as f64, -event.movement_y() as f64))
+                            })}
+                        />
+                    </div>
+                </div>
             </div>
         }
     }
@@ -534,7 +563,13 @@ impl App {
             if let Some(pyramid_images) = self.pyramid_id_to_cached_pyramid_images.get(pyramid_id) {
                 if let Some(image) = pyramid_images[level as usize].as_ref() {
                     web_sys::console::log_1(
-                        &format!("Using cached pyramid level {} - dimensions: ({},{})", level, image.width(), image.height()).into(),
+                        &format!(
+                            "Using cached pyramid level {} - dimensions: ({},{})",
+                            level,
+                            image.width(),
+                            image.height()
+                        )
+                        .into(),
                     );
                     return Some(image);
                 }
@@ -572,13 +607,14 @@ impl App {
             };
 
         let current_view = self.current_view;
-        let (image, use_relative_zoom) = match self.get_cached_image(selected_image_file_details, current_view.zoom) {
-            Some(image) => (image, true),
-            None => {
-                web_sys::console::log_1(&"Using full-resolution image".into());
-                (&selected_image_file_details.image, false)
-            }
-        };
+        let (image, use_relative_zoom) =
+            match self.get_cached_image(selected_image_file_details, current_view.zoom) {
+                Some(image) => (image, true),
+                None => {
+                    web_sys::console::log_1(&"Using full-resolution image".into());
+                    (&selected_image_file_details.image, false)
+                }
+            };
 
         // Canvas should always be the same size as the original image
         canvas.set_width(selected_image_file_details.image.width());

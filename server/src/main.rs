@@ -32,8 +32,8 @@ use ::axum::{
 
 use mongodb::Client;
 
-use tower_http::{trace, services::ServeDir};
 use tower::ServiceExt;
+use tower_http::{services::ServeDir, trace};
 extern crate tracing;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
