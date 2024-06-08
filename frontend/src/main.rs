@@ -617,7 +617,12 @@ impl App {
                 }
             };
 
-        // Canvas should always be the same size as the original image
+        // Canvas should always be the same size as the original image.
+        //
+        // Longer term we probably want to determine this based on user viewport, so we don't waste
+        // time rendering pixels that are too small to see on the user's display. For now, we just
+        // set it to match the original image as it makes ROI computations a bit easier. However,
+        // this leads to performance degregation on large images for the aforementioned reason.
         canvas.set_width(selected_image_file_details.image.width());
         canvas.set_height(selected_image_file_details.image.height());
 
@@ -655,6 +660,46 @@ impl App {
                 web_sys::console::log_1(&format!("Error drawing image: {:?}", e).into());
             }
         }
+
+        let (level, relative_zoom) = level_and_relative_zoom_for(current_view.zoom);
+        let effective_zoom = current_view.zoom;
+
+        // Info display should eventually be refactored.
+        canvas_ctx.set_fill_style(&"black".into());
+        canvas_ctx.fill_rect(0.0, 0.0, 200.0, 60.0);
+        canvas_ctx.set_fill_style(&"white".into());
+        canvas_ctx.set_font("14px Courier New"); // Larger font size
+        match canvas_ctx.fill_text(
+            &format!("Level:          {}", level),
+            10.0,
+            15.0,
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                web_sys::console::log_1(&format!("Error drawing text: {:?}", e).into());
+            }
+        }
+        match canvas_ctx.fill_text(
+            &format!("Relative zoom:  {:.2}", relative_zoom),
+            10.0,
+            30.0,
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                web_sys::console::log_1(&format!("Error drawing text: {:?}", e).into());
+            }
+        }
+        match canvas_ctx.fill_text(
+            &format!("Effective zoom: {:.2}", effective_zoom),
+            10.0,
+            45.0,
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                web_sys::console::log_1(&format!("Error drawing text: {:?}", e).into());
+            }
+        }
+    
     }
 
     fn preview_file(&self, ctx: &Context<Self>, file: &FileDetails) -> Html {
