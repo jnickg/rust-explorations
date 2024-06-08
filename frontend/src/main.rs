@@ -471,63 +471,63 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div id="wrapper">
-                <p id="title">{ "Load file(s)" }</p>
-                <label for="file-upload">
-                    <div
-                        id="drop-container"
-                        ondrop={ctx.link().callback(|event: DragEvent| {
-                            event.prevent_default();
-                            let files = event.data_transfer().unwrap().files();
-                            Self::upload_files(files)
+                <div id="left-bar">
+                    <p id="title">{ "Load file(s)" }</p>
+                    <label for="file-upload">
+                        <div
+                            id="drop-container"
+                            ondrop={ctx.link().callback(|event: DragEvent| {
+                                event.prevent_default();
+                                let files = event.data_transfer().unwrap().files();
+                                Self::upload_files(files)
+                            })}
+                            ondragover={Callback::from(|event: DragEvent| {
+                                event.prevent_default();
+                            })}
+                            ondragenter={Callback::from(|event: DragEvent| {
+                                event.prevent_default();
+                            })}
+                        >
+                            <i class="fa fa-cloud-upload"></i>
+                            <p>{"Drop your images here or click to select"}</p>
+                        </div>
+                    </label>
+                    <input
+                        id="file-upload"
+                        type="file"
+                        accept="image/*"
+                        onchange={ctx.link().callback(move |e: Event| {
+                            let input: HtmlInputElement = e.target_unchecked_into();
+                            Self::upload_files(input.files())
                         })}
-                        ondragover={Callback::from(|event: DragEvent| {
-                            event.prevent_default();
-                        })}
-                        ondragenter={Callback::from(|event: DragEvent| {
-                            event.prevent_default();
-                        })}
-                    >
-                        <i class="fa fa-cloud-upload"></i>
-                        <p>{"Drop your images here or click to select"}</p>
+                    />
+                    <p id="title">{ "Select an image" }</p>
+                    <p>{ "Click on an image to view it in the viewer, then scroll down to view it." }</p>
+                    <div id="preview-area">
+                        { for self.files.iter().map(
+                            |file| self.preview_file(ctx, file)
+                        ) }
                     </div>
-                </label>
-                <input
-                    id="file-upload"
-                    type="file"
-                    accept="image/*"
-                    onchange={ctx.link().callback(move |e: Event| {
-                        let input: HtmlInputElement = e.target_unchecked_into();
-                        Self::upload_files(input.files())
-                    })}
-                />
-                <p id="title">{ "Select an image" }</p>
-                <p>{ "Click on an image to view it in the viewer, then scroll down to view it." }</p>
-                <div id="preview-area">
-                    { for self.files.iter().map(
-                        |file| self.preview_file(ctx, file)
-                    ) }
                 </div>
-                <div id="viewier-area">
+                <div id="viewer-area">
                     <div class="info">
                         <p id="title">{ "Image Viewer" }</p>
                         <p>{ "Use the mouse wheel to zoom, and click and drag to pan" }</p>
                     </div>
-                    <div class="content">
-                        <canvas
-                            id="viewer-canvas"
-                            onwheel={ctx.link().callback(|event: WheelEvent| {
-                                event.prevent_default();
-                                Msg::ViewZoom(-event.delta_y())
-                            })}
-                            onmousedown={ctx.link().callback(|_| Msg::ViewPanState(true))}
-                            onmouseup={ctx.link().callback(|_| Msg::ViewPanState(false))}
-                            onmouseleave={ctx.link().callback(|_| Msg::ViewPanState(false))}
-                            onmousemove={ctx.link().callback(|event: MouseEvent| {
-                                event.prevent_default();
-                                Msg::ViewPan((-event.movement_x() as f64, -event.movement_y() as f64))
-                            })}
-                        />
-                    </div>
+                    <canvas
+                        id="viewer-canvas"
+                        onwheel={ctx.link().callback(|event: WheelEvent| {
+                            event.prevent_default();
+                            Msg::ViewZoom(-event.delta_y())
+                        })}
+                        onmousedown={ctx.link().callback(|_| Msg::ViewPanState(true))}
+                        onmouseup={ctx.link().callback(|_| Msg::ViewPanState(false))}
+                        onmouseleave={ctx.link().callback(|_| Msg::ViewPanState(false))}
+                        onmousemove={ctx.link().callback(|event: MouseEvent| {
+                            event.prevent_default();
+                            Msg::ViewPan((-event.movement_x() as f64, -event.movement_y() as f64))
+                        })}
+                    />
                 </div>
             </div>
         }
@@ -623,8 +623,11 @@ impl App {
         // time rendering pixels that are too small to see on the user's display. For now, we just
         // set it to match the original image as it makes ROI computations a bit easier. However,
         // this leads to performance degregation on large images for the aforementioned reason.
-        canvas.set_width(selected_image_file_details.image.width());
-        canvas.set_height(selected_image_file_details.image.height());
+        // canvas.set_width(selected_image_file_details.image.width());
+        // canvas.set_height(selected_image_file_details.image.height());
+        // Instead of the above, set the canvas to be 1:1 for its dimensions in the window
+        canvas.set_width(canvas.offset_width() as u32 - 1);
+        canvas.set_height(canvas.offset_height() as u32 - 1);
 
         let src_dims = Dims {
             w: image.width() as f64,
@@ -666,7 +669,7 @@ impl App {
 
         // Info display should eventually be refactored.
         canvas_ctx.set_fill_style(&"black".into());
-        canvas_ctx.fill_rect(0.0, 0.0, 200.0, 60.0);
+        canvas_ctx.fill_rect(0.0, 0.0, 225.0, 60.0);
         canvas_ctx.set_fill_style(&"white".into());
         canvas_ctx.set_font("14px Courier New"); // Larger font size
         match canvas_ctx.fill_text(
@@ -680,7 +683,7 @@ impl App {
             }
         }
         match canvas_ctx.fill_text(
-            &format!("Relative zoom:  {:.2}", relative_zoom),
+            &format!("Relative zoom:  {:.2}%", relative_zoom*100.0),
             10.0,
             30.0,
         ) {
@@ -690,7 +693,7 @@ impl App {
             }
         }
         match canvas_ctx.fill_text(
-            &format!("Effective zoom: {:.2}", effective_zoom),
+            &format!("Effective zoom: {:.2}%", effective_zoom*100.0),
             10.0,
             45.0,
         ) {

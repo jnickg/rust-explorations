@@ -5,6 +5,8 @@
   
   html,
   body {
+    width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
     background: #2d3131;
@@ -13,12 +15,13 @@
   
   img,
   video {
-    max-width: 150px;
-    max-height: 250px;
+    max-width: 100px;
+    max-height: 100px;
   }
   
   p {
     text-align: center;
+    margin: 1rem;
   }
   
   label {
@@ -31,12 +34,31 @@
   
   #wrapper {
     width: 70%;
+    height: 100%;
     margin: auto;
+    display: flex;
+    flex-direction: row;
   }
   
   #title {
     font-size: 2rem;
     text-align: center;
+  }
+  #header {
+    text-align: center;
+    font-size: 1.5rem;
+  }
+  #left-bar {
+    display: flex;
+    flex-direction: column;
+    float: left;
+    flex-basis: 25%;
+
+  }
+  #viewer-area {
+    float: right;
+    display: grid;
+    flex-basis: 75%;
   }
   
   #drop-container {
@@ -60,14 +82,25 @@
     justify-content: center;
     align-items: stretch;
   }
-  
+
   .preview-tile {
+    position: relative;
     display: flex;
     flex-direction: column;
-    padding: 2rem;
+    padding: 1rem;
     margin: 1rem;
     background: #313737;
     border-radius: 1rem;
+    word-wrap: break-word;
+  }
+  .preview-name {
+    position: absolute;
+    top: 8px;
+    text-shadow: #2d3131;
+    text-align: center;
+    font-size: smaller;
+    font-family: 'Courier New', Courier, monospace;
+    overflow-x: hidden;
   }
   .selected {
     border: 2px solid #fcfcfc;
@@ -82,8 +115,9 @@
 
   #viewer-canvas {
     width: 100%;
-    height: auto;
+    height: 100%;
     border: 2px solid black;
     border-radius: 1rem;
     background-color: black;
+    overflow: hidden;
   }
