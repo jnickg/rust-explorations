@@ -17,6 +17,7 @@ mod wrappers;
 
 use std::sync::Arc;
 
+use axum::extract::DefaultBodyLimit;
 use clap::{arg, Parser};
 
 use tokio::sync::RwLock;
@@ -171,6 +172,7 @@ async fn main() {
         .nest("/api/v1", api_routes)
         .fallback(handler_404)
         .layer(trace_layer)
+        .layer(DefaultBodyLimit::disable())
         .with_state(Arc::new(RwLock::new(state)));
 
     println!("Listening on port {}", args.port);

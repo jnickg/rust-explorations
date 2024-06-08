@@ -36,7 +36,8 @@ docker compose up --build -d mongodb --force-recreate
 # This builds the frontend and backend and keeps them both updated live as files change.
 # Alternatively, you could run:
 # cargo run --bin jnickg_tile_server -- --host localhost --user admin --pass ./secrets/mongo-pw.txt --db-port 27017 --port 8081 --static-dir dist/
-./run_site_dev.sh
+./run_site_dev.sh --release
+# Or exclude --release to run the debug build
 ```
 
 ### Using
@@ -66,14 +67,14 @@ sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions
 - [x] Brotli compression of tiled image pyramid
 - [x] Persistent DB backend (MongoDB)
   - [x] integrate Image support (Doc + GridFS)
-  - [ ] integrate Matrix support (Doc)
+  - [ ] integrate Matrix support (Doc) (Not needed)
   - [x] integrate Pyramid support (Doc + Images)
   - [x] integrate Tile support (Doc + Images)
 - [ ] Wasm support
-  - [ ] Headless backend
-  - [ ] In-browser frontend - follow [this](https://robert.kra.hn/posts/2022-04-03_rust-web-wasm/)
-- [ ] Websocket support for long-running tasks
-- [ ] User interface
+  - [ ] Headless backend (Not needed)
+  - [x] In-browser frontend
+- [ ] Websocket support for long-running tasks (Stretch)
+- [x] User interface
 
 ## Support
 

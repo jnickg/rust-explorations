@@ -1187,12 +1187,13 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
 
     let bytes = match Bytes::from_request(request, &app_state).await {
         Ok(b) => b.to_vec(),
-        Err(_) => {
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to read image data from request body.\n",
             )
-                .into_response()
+                .into_response();
         }
     };
     debug_print!("Extracted image data with byte length: {}", bytes.len());

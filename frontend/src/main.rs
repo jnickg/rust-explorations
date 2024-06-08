@@ -329,8 +329,9 @@ impl Component for App {
             Msg::Loaded(file_name, file_type, data) => {
                 // analogous curl:
                 //      `curl --data-binary "@helldivers.jpg" -H "Content-Type: image/jpeg" -X POST http://localhost:3000/api/v1/pyramid`
-                web_sys::console::log_1(&format!("file_type: {}", file_type).into());
-                let data_as_jsvalue = JsValue::from(Uint8Array::from(data.as_slice()));
+                let data_as_uint8array = Uint8Array::from(data.as_slice());
+                let data_as_jsvalue = JsValue::from(data_as_uint8array);
+
                 let request = Request::new_with_str_and_init(
                     "http://localhost:8080/api/v1/pyramid",
                     &web_sys::RequestInit::new()
@@ -629,11 +630,21 @@ impl App {
             h: canvas.height() as f64,
         };
         let CanvasRoiPair {
-            s: src_roi,
-            d: dest_roi,
+            s:
+                Roi2D {
+                    x: sx,
+                    y: sy,
+                    w: sw,
+                    h: sh,
+                },
+            d:
+                Roi2D {
+                    x: dx,
+                    y: dy,
+                    w: dw,
+                    h: dh,
+                },
         } = current_view.to_roi(src_dims, dest_dims, use_relative_zoom);
-        let (sx, sy, sw, sh) = (src_roi.x, src_roi.y, src_roi.w, src_roi.h);
-        let (dx, dy, dw, dh) = (dest_roi.x, dest_roi.y, dest_roi.w, dest_roi.h);
 
         match canvas_ctx
             .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
