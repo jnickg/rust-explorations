@@ -1,4 +1,4 @@
-# Rust Web Example
+# Simple Image Viewer
 
 > Written by: Nick Giampietro
 > AKA `giampiet` (PSU)
@@ -6,9 +6,22 @@
 
 ## Overview
 
-A collection of random one-off explorations into Rust-basd full-stack development
+A simple tiling & pyramid-based image viewer, powered by Webassembly and Rust.
+
+This project contains a backend server capable of computing an image pyramid, tiling pyramid levels into arbitrary sizes, and brotli compressing tiles. They are then made available using a simple REST API. Results are stored in a MongoDB instance for persistence.
+
+Because the library also compiles to Webassembly, the frontend is capable of running the above routines locally. This is currently not implemented, however.
+
+The sample frontend uses Yew to create the single-page application users see in their browser. The canvas in the SPA samples from the computed image pyramid, rather than scaling a large source image. This means that zooming out, and panning at distant zoom levels, is much faster. This is especially noticeable with large images, where subsampling a 4K image proves to be a lot of work.
 
 ## Developer Guide
+
+### Requirements
+
+- Docker & Docker Compose
+- Rust and rustup, nightly build channel, and `wasm32-unknown-unknown` toolchain installed
+- Cargo, and associated tools (e.g. Clippy & Trunk)
+- Bash-like terminal for running scripts
 
 ### Building
 
@@ -43,14 +56,16 @@ docker compose up --build -d mongodb --force-recreate
 ### Using
 
 - See the [`./examples`](./examples/) directory for some examples of interacting with the server, including `curl` commands
-- Navigate to [http://localhost:3000](http://localhost:3000) for a landing page, which includes lings to OpenAPI documentation and the like
+- Navigate to [http://localhost:8080](http://localhost:8080) for the SPA
+- Navigate to [http://localhost:8080/api/v1](http://localhost:8080/api/v1/) for an SPI landing page, which includes links to OpenAPI documentation, and shows data present on the server instance (images, pyramid levels, and individual tiles)
+- Navigate to [http://localhost:8081/swagger-ui/](http://localhost:8081/swagger-ui/) for the Swagger documentation.
 
 ### Cleaning
 
 Clean the MongoDB instance of all data
 
 ```bash
-docker compose down mongodb
+docker compose down mongodb # In case the run scripts failed to kill it
 sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions. This clears local files
 ```
 
