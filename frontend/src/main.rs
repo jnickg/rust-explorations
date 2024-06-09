@@ -112,7 +112,7 @@ impl View2D {
     /// - See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
     ///   for explanation of values
     fn to_roi(
-        &self,
+        self,
         Dims { w: src_w, h: src_h }: Dims,
         Dims {
             w: dest_w,
@@ -235,7 +235,7 @@ impl Component for App {
     fn create(ctx: &Context<Self>) -> Self {
         let request = Request::new_with_str_and_init(
             "http://localhost:8080/api/v1/pyramids",
-            &web_sys::RequestInit::new().method("GET"),
+            web_sys::RequestInit::new().method("GET"),
         )
         .unwrap();
         // When we get a response to that request, we should send Msg::ExistingPyramid for each JSON
@@ -435,7 +435,7 @@ impl Component for App {
 
                     let request = Request::new_with_str_and_init(
                         "http://localhost:8080/api/v1/pyramid",
-                        &web_sys::RequestInit::new()
+                        web_sys::RequestInit::new()
                             .method("POST")
                             .body(Some(&data_as_jsvalue)),
                     )
@@ -552,8 +552,8 @@ impl Component for App {
                     dx / self.current_view.zoom / self.get_canvas_ctx().unwrap().0.width() as f64;
                 let dy_unit =
                     dy / self.current_view.zoom / self.get_canvas_ctx().unwrap().0.height() as f64;
-                let x_unit = (x_unit + dx_unit).max(0.0).min(1.0);
-                let y_unit = (y_unit + dy_unit).max(0.0).min(1.0);
+                let x_unit = (x_unit + dx_unit).clamp(0.0, 1.0);
+                let y_unit = (y_unit + dy_unit).clamp(0.0, 1.0);
                 self.current_view.unit_loc = (x_unit, y_unit);
 
                 self.render_canvas(ctx);
@@ -566,7 +566,7 @@ impl Component for App {
             Msg::ViewZoom(dz) => {
                 self.current_view.zoom *= 1.0 + dz / 1000.0;
                 // Clamps to 0.01% / 10000% range
-                self.current_view.zoom = self.current_view.zoom.max(0.0001).min(100.0);
+                self.current_view.zoom = self.current_view.zoom.clamp(0.0001, 100.0);
                 self.render_canvas(ctx);
                 true
             }
@@ -771,7 +771,7 @@ impl App {
 
         match canvas_ctx
             .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                &image, sx, sy, sw, sh, dx, dy, dw, dh,
+                image, sx, sy, sw, sh, dx, dy, dw, dh,
             ) {
             Ok(_) => {}
             Err(e) => {

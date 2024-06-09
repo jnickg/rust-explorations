@@ -6,7 +6,7 @@ use crate::dyn_matrix::DynMatrix;
 
 pub struct IprImage<'a>(pub &'a DynamicImage);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ImageTiles {
     pub original_width: u32,
     pub original_height: u32,
@@ -15,20 +15,6 @@ pub struct ImageTiles {
     pub tile_height: u32,
     pub count_across: u32,
     pub count_down: u32,
-}
-
-impl Default for ImageTiles {
-    fn default() -> Self {
-        ImageTiles {
-            original_width: 0,
-            original_height: 0,
-            tiles: Vec::new(),
-            tile_width: 0,
-            tile_height: 0,
-            count_across: 0,
-            count_down: 0,
-        }
-    }
 }
 
 impl Clone for ImageTiles {
@@ -82,7 +68,7 @@ impl<'a> HasImageProcessingRoutines for IprImage<'a> {
             smoothing_type: SmoothingType::Gaussian,
         };
 
-        let pyramid = ImagePyramid::create(&self.0, Some(&params))?;
+        let pyramid = ImagePyramid::create(self.0, Some(&params))?;
 
         Ok(pyramid.levels)
     }
