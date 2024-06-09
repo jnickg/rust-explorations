@@ -8,6 +8,8 @@
 
 A simple tiling & pyramid-based image viewer, powered by Webassembly and Rust.
 
+![Preview of the Simple Image Viewer SPA](./res/preview.png)
+
 This project contains a backend server capable of computing an image pyramid, tiling pyramid levels into arbitrary sizes, and brotli compressing tiles. They are then made available using a simple REST API. Results are stored in a MongoDB instance for persistence.
 
 Because the library also compiles to Webassembly, the frontend is capable of running the above routines locally. This is currently not implemented, however.
