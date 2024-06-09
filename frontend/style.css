@@ -114,11 +114,13 @@
     background: #313737;
     border-radius: 1rem;
     word-wrap: break-word;
+    border: 2px solid #313737;
   }
   .preview-name {
     position: absolute;
     bottom: 5px;
-    text-shadow: 2px #2d3131;
+    text-shadow: 1px 1px 2px black;
+    background: rgba(0,0,0,0.5);
     text-align: center;
     font-size: smaller;
     font-family: 'Courier New', Courier, monospace;
