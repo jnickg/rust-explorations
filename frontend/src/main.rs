@@ -736,15 +736,7 @@ impl App {
                 }
             };
 
-        // Canvas should always be the same size as the original image.
-        //
-        // Longer term we probably want to determine this based on user viewport, so we don't waste
-        // time rendering pixels that are too small to see on the user's display. For now, we just
-        // set it to match the original image as it makes ROI computations a bit easier. However,
-        // this leads to performance degregation on large images for the aforementioned reason.
-        // canvas.set_width(selected_image_file_details.image.width());
-        // canvas.set_height(selected_image_file_details.image.height());
-        // Instead of the above, set the canvas to be 1:1 for its dimensions in the window
+        // We make sure the pixel buffer in the canvas matches the on-screen viewport.
         canvas.set_width(canvas.offset_width() as u32 - 1);
         canvas.set_height(canvas.offset_height() as u32 - 1);
 
