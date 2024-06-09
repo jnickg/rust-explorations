@@ -22,8 +22,23 @@ The sample frontend uses Yew to create the single-page application users see in 
 
 - Docker & Docker Compose
 - Rust and rustup, nightly build channel, and `wasm32-unknown-unknown` toolchain installed
-- Cargo, and associated tools (e.g. Clippy & Trunk)
+- Cargo, and associated tools (e.g. `cargo clippy`, [`cargo watch`](https://crates.io/crates/cargo-watch), and [`trunk`](https://trunkrs.dev/))
 - Bash-like terminal for running scripts
+
+### First-time Setup
+
+Set up admin user credentials for the MongoDB container. The generated files live in the `secrets` directory, and need to be present in order for the docker container and server to function properly. Fresh clones, and any repositories that were recently `git clean`ed, will need to go through this step.
+
+```bash
+echo "myPassword" > secrets/mongo-pw.txt
+echo "myAdminUser" > secrets/mongo-user.txt
+# This is required because docker compose and/or official MongoDB image is jank and won't honor
+# MONGO_INITDB_ROOT_PASSWORD_FILE environment variables, just MONGO_INITDB_ROOT_PASSWORD. To keep
+# the passwords out of source control (out of docker-compose.yaml), we make an env file for the
+# mongo image, which seems to work
+./generate_mongo_env.sh
+docker compose up --build -d mongodb --force-recreate
+```
 
 ### Building
 
@@ -37,23 +52,19 @@ docker compose build mongodb
 
 ### Running
 
-Set up admin user credentials for the MongoDB container
-
 ```bash
-echo "myPassword" > secrets/mongo-pw.txt
-echo "myAdminUser" > secrets/mongo-user.txt
-# This is required because docker compose and/or official MongoDB image is jank and won't honor
-# MONGO_INITDB_ROOT_PASSWORD_FILE environment variables, just MONGO_INITDB_ROOT_PASSWORD. To keep
-# the passwords out of source control (out of docker-compose.yaml), we make an env file for the
-# mongo image, which seems to work
-./generate_mongo_env.sh
-docker compose up --build -d mongodb --force-recreate
 # This builds the frontend and backend and keeps them both updated live as files change.
-# Alternatively, you could run:
-# cargo run --bin jnickg_tile_server -- --host localhost --user admin --pass ./secrets/mongo-pw.txt --db-port 27017 --port 8081 --static-dir dist/
+# To run in debug mode, simply exclude --release
 ./run_site_dev.sh --release
-# Or exclude --release to run the debug build
 ```
+
+Alternatively, you can run the launch commands manually:
+
+- `docker compose up --build -d mongodb`
+- `cd frontend && trunk serve --release --proxy-backend=http://localhost:8081/api/v1 &`
+- `cd server && cargo watch -- cargo run --bin jnickg_tile_server $RELEASE_FLAG -- --host localhost --user admin --pass ../secrets/mongo-pw.txt --db-port 27017 --port 8081 --static-dir ../dist/ &`
+
+Note that you will need to manually kill the spawned processes by their PID when you are done, and run `docker compose down mongodb` to shutdown the MongoDB server.
 
 ### Using
 
@@ -69,6 +80,13 @@ Clean the MongoDB instance of all data
 ```bash
 docker compose down mongodb # In case the run scripts failed to kill it
 sudo rm -rf ./mongo/db # We volume mount DB data so it persists between sessions. This clears local files
+```
+
+The following should not be necessary, but in order to rule out stale build artifacts during debug, the following can be run from the directory root:
+
+```bash
+rm -rf dist
+cargo clean --verbose
 ```
 
 ### Tasks
