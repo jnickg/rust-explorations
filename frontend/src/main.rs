@@ -561,6 +561,8 @@ impl Component for App {
             }
             Msg::ViewZoom(dz) => {
                 self.current_view.zoom *= 1.0 + dz / 1000.0;
+                // Clamps to 0.01% / 10000% range
+                self.current_view.zoom = self.current_view.zoom.max(0.0001).min(100.0);
                 self.render_canvas(ctx);
                 true
             }
@@ -579,64 +581,68 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <div id="wrapper">
-                <div id="left-bar">
-                    <p id="title">{ "Load file(s)" }</p>
-                    <label for="file-upload">
-                        <div
-                            id="drop-container"
-                            ondrop={ctx.link().callback(|event: DragEvent| {
+                <div id="viewer-area">
+                    <div class="info">
+                        <p id="title">{ "Image Viewer" }</p>
+                        <p>{ "A Rust/Wasm based image viewer. Upload or select an image, then use the mouse wheel to zoom, and click and drag to pan." }</p>
+                    </div>
+                    <div class="content">
+                        <canvas
+                            id="viewer-canvas"
+                            onwheel={ctx.link().callback(|event: WheelEvent| {
                                 event.prevent_default();
-                                let files = event.data_transfer().unwrap().files();
-                                Self::upload_files(files)
+                                Msg::ViewZoom(-event.delta_y())
                             })}
-                            ondragover={Callback::from(|event: DragEvent| {
+                            onmousedown={ctx.link().callback(|_| Msg::ViewPanState(true))}
+                            onmouseup={ctx.link().callback(|_| Msg::ViewPanState(false))}
+                            onmouseleave={ctx.link().callback(|_| Msg::ViewPanState(false))}
+                            onmousemove={ctx.link().callback(|event: MouseEvent| {
                                 event.prevent_default();
+                                Msg::ViewPan((-event.movement_x() as f64, -event.movement_y() as f64))
                             })}
-                            ondragenter={Callback::from(|event: DragEvent| {
-                                event.prevent_default();
+                        />
+                    </div>
+                </div>
+
+                <div id="bottom-bar">
+                    <div id="upload">
+                        <label for="file-upload">
+                            <div
+                                id="drop-container"
+                                ondrop={ctx.link().callback(|event: DragEvent| {
+                                    event.prevent_default();
+                                    let files = event.data_transfer().unwrap().files();
+                                    Self::upload_files(files)
+                                })}
+                                ondragover={Callback::from(|event: DragEvent| {
+                                    event.prevent_default();
+                                })}
+                                ondragenter={Callback::from(|event: DragEvent| {
+                                    event.prevent_default();
+                                })}
+                            >
+                                <i class="fa fa-cloud-upload"></i>
+                                <p>{"Drop your images here or click to select"}</p>
+                            </div>
+                        </label>
+                        <input
+                            id="file-upload"
+                            type="file"
+                            accept="image/*"
+                            onchange={ctx.link().callback(move |e: Event| {
+                                let input: HtmlInputElement = e.target_unchecked_into();
+                                Self::upload_files(input.files())
                             })}
-                        >
-                            <i class="fa fa-cloud-upload"></i>
-                            <p>{"Drop your images here or click to select"}</p>
-                        </div>
-                    </label>
-                    <input
-                        id="file-upload"
-                        type="file"
-                        accept="image/*"
-                        onchange={ctx.link().callback(move |e: Event| {
-                            let input: HtmlInputElement = e.target_unchecked_into();
-                            Self::upload_files(input.files())
-                        })}
-                    />
-                    <p id="title">{ "Select an image" }</p>
-                    <p>{ "Click on an image to view it in the viewer, then scroll down to view it." }</p>
+                        />
+                    </div>
+                    
                     <div id="preview-area">
                         { for self.files.iter().map(
                             |file| self.preview_file(ctx, file)
                         ) }
                     </div>
                 </div>
-                <div id="viewer-area">
-                    <div class="info">
-                        <p id="title">{ "Image Viewer" }</p>
-                        <p>{ "Use the mouse wheel to zoom, and click and drag to pan" }</p>
-                    </div>
-                    <canvas
-                        id="viewer-canvas"
-                        onwheel={ctx.link().callback(|event: WheelEvent| {
-                            event.prevent_default();
-                            Msg::ViewZoom(-event.delta_y())
-                        })}
-                        onmousedown={ctx.link().callback(|_| Msg::ViewPanState(true))}
-                        onmouseup={ctx.link().callback(|_| Msg::ViewPanState(false))}
-                        onmouseleave={ctx.link().callback(|_| Msg::ViewPanState(false))}
-                        onmousemove={ctx.link().callback(|event: MouseEvent| {
-                            event.prevent_default();
-                            Msg::ViewPan((-event.movement_x() as f64, -event.movement_y() as f64))
-                        })}
-                    />
-                </div>
+
             </div>
         }
     }
@@ -670,6 +676,11 @@ impl App {
         // If we have a cached pyramid level, use that instead
         if let Some(pyramid_id) = self.file_to_pyramid_id.get(&selected_image.name) {
             if let Some(pyramid_images) = self.pyramid_id_to_cached_pyramid_images.get(pyramid_id) {
+                let level = if (level as usize) < pyramid_images.len() {
+                    level
+                } else {
+                    pyramid_images.len() as u16 - 1
+                };
                 if let Some(image) = pyramid_images[level as usize].as_ref() {
                     web_sys::console::log_1(
                         &format!(
