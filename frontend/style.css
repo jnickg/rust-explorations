@@ -57,7 +57,8 @@
   }
   #viewer-area {
     float: right;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     flex-basis: 75%;
   }
   
@@ -81,6 +82,10 @@
     flex-wrap: wrap;
     justify-content: center;
     align-items: stretch;
+  }
+
+  .info {
+    flex-basis: 10%;
   }
 
   .preview-tile {
@@ -120,4 +125,5 @@
     border-radius: 1rem;
     background-color: black;
     overflow: hidden;
+    flex-basis: 90%;
   }

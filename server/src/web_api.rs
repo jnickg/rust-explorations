@@ -670,21 +670,11 @@ pub async fn get_images(State(app_state): AppState) -> Response {
         .unwrap()
 }
 
-#[utoipa::path(
-    get,
-    path = "/api/v1/image/{name}",
-    request_body(
-        content = Bytes,
-    ),
-    responses(
-        (status = StatusCode::OK, description = "Returned the image of the given name", body = Vec<u8>),
-        (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
-    )
-)]
-pub async fn get_image(
+pub async fn get_image_from_collection(
     State(app_state): AppState,
     Path(name): Path<String>,
     request: Request,
+    collection_name: &str
 ) -> Response {
     // If name has an extension, try to discern the desired format from it. But drop the extension
     // for the purpose of image lookup. We try to adhere to user request, but default to PNG if
@@ -702,7 +692,7 @@ pub async fn get_image(
             .into_response();
     }
     let db = app.db.as_ref().unwrap();
-    let images: Collection<Document> = db.collection("images");
+    let images: Collection<Document> = db.collection(collection_name);
     let mut found = match images
         .find(
             doc! {
@@ -868,24 +858,11 @@ pub async fn get_image(
     builder.body(Body::from(image_bytes)).unwrap()
 }
 
-#[utoipa::path(
-    put,
-    path = "/api/v1/image/{name}",
-    request_body(
-        content = Bytes,
-    ),
-    responses(
-        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
-        (status = StatusCode::CREATED, description = "No existing image found, so, image of the given name was added", body = ()),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
-        (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
-        (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
-    )
-)]
-pub async fn put_image(
+pub async fn put_image_in_collection(
     State(app_state): AppState,
     Path(image_name): Path<String>,
     request: Request,
+    collection_name: &str
 ) -> Response {
     let content_type_hdr = request.headers().get("Content-Type");
     if content_type_hdr.is_none() {
@@ -935,7 +912,7 @@ pub async fn put_image(
     // Check if there is an existing document in the image collection with the given name. If there
     // is, get the `image` ObjectId for the GridFS file. Delete both the document and the GridFS file
 
-    let image_collection: Collection<Document> = db.collection("images");
+    let image_collection: Collection<Document> = db.collection(collection_name);
     let existing_image = match image_collection
         .find_one(
             doc! {
@@ -1011,7 +988,7 @@ pub async fn put_image(
     }
 
     let image_id = upload_stream.id();
-    let images = db.collection("images");
+    let images = db.collection(collection_name);
     let doc = doc! {
         "name": image_name.clone(),
         "image": image_id,
@@ -1058,19 +1035,7 @@ pub async fn put_image(
     }
 }
 
-#[utoipa::path(
-    delete,
-    path = "/api/v1/image/{name}",
-    request_body(
-        content = Bytes,
-    ),
-    responses(
-        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
-        (status = StatusCode::NOT_FOUND, description = "No existing image found; could not delete.", body = ()),
-        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
-    )
-)]
-pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<String>) -> Response {
+pub async fn delete_image_from_collection(State(app_state): AppState, Path(image_name): Path<String>, collection_name: &str) -> Response {
     let app = &mut app_state.write().await;
     if app.db.is_none() {
         return (
@@ -1080,7 +1045,7 @@ pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<Str
             .into_response();
     }
     let db = app.db.as_ref().unwrap();
-    let images: Collection<Document> = db.collection("images");
+    let images: Collection<Document> = db.collection(collection_name);
     let existing_image = match images
         .find_one(
             doc! {
@@ -1160,6 +1125,31 @@ pub async fn delete_image(State(app_state): AppState, Path(image_name): Path<Str
     )
 )]
 pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Response {
+    let content_disposition_hdr = request.headers().get("Content-Disposition");
+    let image_name: String = if content_disposition_hdr.is_some() {
+        let content_disposition = content_disposition_hdr.unwrap().to_str().unwrap();
+        dbg!(&content_disposition);
+        let parts: Vec<&str> = content_disposition.split(';').map(|p| p.trim()).collect();
+        let name_part = parts.iter().find(|&p| p.starts_with("filename"));
+        if name_part.is_none() {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Unable to handle request. Please pass an image body and specify content type.\n",
+            )
+                .into_response();
+        }
+        let name_part = name_part.unwrap();
+        let name_parts: Vec<&str> = name_part.split('=').collect();
+        let name = name_parts.get(1).unwrap();
+        name.to_string()
+    } else {
+        let app = &mut app_state.write().await;
+        let new_name = format!("image_{}", app.image_counter);
+        app.image_counter += 1;
+        new_name
+    };
+    debug_print!("Attempting to add new image with name {}", image_name);
+
     let content_type_hdr = request.headers().get("Content-Type");
     if content_type_hdr.is_none() {
         return (
@@ -1325,6 +1315,7 @@ pub async fn post_pyramid(State(app_state): AppState, request: Request) -> Respo
     let pyramid_doc = doc! {
         "uuid": format!("{}", pyramid_uuid),
         "url": format!("/api/v1/pyramid/{}", pyramid_uuid),
+        "original_filename": image_name,
         "image_files": image_ids,
         "image_names": image_names,
         "image_docs": image_doc_ids,
@@ -1453,4 +1444,248 @@ pub async fn get_pyramid(State(app_state): AppState, Path(uuid): Path<String>) -
         .header("Content-Type", "application/json")
         .body(Body::from(json.to_string()))
         .unwrap()
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/pyramids",
+    responses(
+        (status = StatusCode::OK, description = "Returned a JSON list of image documents", body = Json),
+    )
+)]
+pub async fn get_pyramids(State(app_state): AppState) -> Response {
+    let app = &mut app_state.read().await;
+    if app.db.is_none() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to acquire handle to image database.\n",
+        )
+            .into_response();
+    }
+    let db = app.db.as_ref().unwrap();
+    let pyramids: Collection<Document> = db.collection("pyramids");
+    let mut found = match pyramids.find(None, None).await {
+        Ok(cursor) => cursor,
+        Err(_e) => {
+            debug_print!("Error: {}", _e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to query pyramid database.\n",
+            )
+                .into_response();
+        }
+    };
+
+    let mut image_docs = Vec::new();
+    while let Some(doc) = found.next().await {
+        match doc {
+            Ok(d) => {
+                image_docs.push(d);
+            }
+            Err(_e) => {
+                debug_print!("Error: {}", _e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to read pyramid document.\n",
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let json = match serde_json::to_string(&image_docs) {
+        Ok(j) => j,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to serialize pyramid document.\n",
+            )
+                .into_response();
+        }
+    };
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(json.to_string()))
+        .unwrap()
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/image/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Returned the image of the given name", body = Vec<u8>),
+        (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
+    )
+)]
+pub async fn get_image(
+    state: AppState,
+    path: Path<String>,
+    request: Request,
+) -> Response {
+    get_image_from_collection(state, path, request, "images").await
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/image/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::CREATED, description = "No existing image found, so, image of the given name was added", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+        (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
+        (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
+    )
+)]
+pub async fn put_image(
+    state: AppState,
+    path: Path<String>,
+    request: Request,
+) -> Response {
+    put_image_in_collection(state, path, request, "images").await
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/image/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::NOT_FOUND, description = "No existing image found; could not delete.", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+    )
+)]
+pub async fn delete_image(state: AppState, path: Path<String>) -> Response {
+    delete_image_from_collection(state, path, "images").await
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Same thing, but for pyramid levels
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/level/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Returned the image of the given name", body = Vec<u8>),
+        (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
+    )
+)]
+pub async fn get_level(
+    state: AppState,
+    path: Path<String>,
+    request: Request,
+) -> Response {
+    get_image_from_collection(state, path, request, "levels").await
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/level/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::CREATED, description = "No existing image found, so, image of the given name was added", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+        (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
+        (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
+    )
+)]
+pub async fn put_level(
+    state: AppState,
+    path: Path<String>,
+    request: Request,
+) -> Response {
+    put_image_in_collection(state, path, request, "levels").await
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/level/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::NOT_FOUND, description = "No existing image found; could not delete.", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+    )
+)]
+pub async fn delete_level(state: AppState, path: Path<String>) -> Response {
+    delete_image_from_collection(state, path, "levels").await
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Same thing, but for pyramid tiles
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/tile/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Returned the image of the given name", body = Vec<u8>),
+        (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
+    )
+)]
+pub async fn get_tile(
+    state: AppState,
+    path: Path<String>,
+    request: Request,
+) -> Response {
+    get_image_from_collection(state, path, request, "tiles").await
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/tile/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::CREATED, description = "No existing image found, so, image of the given name was added", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+        (status = StatusCode::BAD_REQUEST, description = "Unable to handle request. Please pass an image body and specify content type.", body = ()),
+        (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
+    )
+)]
+pub async fn put_tile(
+    state: AppState,
+    path: Path<String>,
+    request: Request,
+) -> Response {
+    put_image_in_collection(state, path, request, "tiles").await
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/tile/{name}",
+    request_body(
+        content = Bytes,
+    ),
+    responses(
+        (status = StatusCode::OK, description = "Image of the given name is updated to the provided image data", body = ()),
+        (status = StatusCode::NOT_FOUND, description = "No existing image found; could not delete.", body = ()),
+        (status = StatusCode::INTERNAL_SERVER_ERROR, description = "Failed to read image from request", body = ()),
+    )
+)]
+pub async fn delete_tile(state: AppState, path: Path<String>) -> Response {
+    delete_image_from_collection(state, path, "tiles").await
 }

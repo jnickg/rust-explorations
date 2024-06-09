@@ -138,6 +138,18 @@ async fn main() {
                 .delete(api::delete_image),
         )
         .route(
+            "/level/:name",
+            get(api::get_level)
+            .put(api::put_level)
+            .delete(api::delete_level),
+        )
+        .route(
+            "/tile/:name",
+            get(api::get_tile)
+            .put(api::put_tile)
+            .delete(api::delete_tile),
+        )
+        .route(
             "/matrix/:name",
             post(api::post_matrix_with_name)
                 .get(api::get_matrix)
@@ -155,7 +167,8 @@ async fn main() {
             post(api::post_matrix_subtract),
         )
         .route("/pyramid", post(api::post_pyramid))
-        .route("/pyramid/:uuid", get(api::get_pyramid));
+        .route("/pyramid/:uuid", get(api::get_pyramid))
+        .route("/pyramids", get(api::get_pyramids));
 
     let swagger_ui =
         SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api::Documentation::openapi());

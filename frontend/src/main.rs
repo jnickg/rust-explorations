@@ -197,11 +197,15 @@ impl Default for View2D {
 pub enum Msg {
     /// An image has been loaded into memory
     ///
-    /// file_name, file_type, data
-    Loaded(String, String, Vec<u8>),
+    /// file_name, file_type, data, do_post
+    Loaded(String, String, Vec<u8>, bool),
     Files(Vec<File>),
     ViewPan((f64, f64)),
     ViewPanState(bool),
+    /// An existing pyramid was discovered on the server
+    /// 
+    /// pyramid_id, pyramid_json
+    ExistingPyramid(String, serde_json::Value),
     /// A new pyramid has been created
     ///
     /// pyramid_id, file_name, pyramid_json
@@ -228,7 +232,41 @@ impl Component for App {
     type Message = Msg;
     type Properties = ();
 
-    fn create(_ctx: &Context<Self>) -> Self {
+    fn create(ctx: &Context<Self>) -> Self {
+        let request = Request::new_with_str_and_init(
+            "http://localhost:8080/api/v1/pyramids",
+            &web_sys::RequestInit::new()
+                .method("GET")
+        )
+        .unwrap();
+        // When we get a response to that request, we should send Msg::ExistingPyramid for each JSON
+        // object in the response.
+        let link = ctx.link().clone();
+        let future = wasm_bindgen_futures::JsFuture::from(web_sys::window().unwrap().fetch_with_request(&request));
+        wasm_bindgen_futures::spawn_local(async move {
+            match future.await {
+                Ok(response) => {
+                    let response = response
+                        .dyn_into::<Response>()
+                        .expect("Failed to convert response");
+                    let json_promise = response.json().unwrap();
+                    let json = wasm_bindgen_futures::JsFuture::from(json_promise)
+                        .await
+                        .unwrap();
+                    let pyramids = json.into_serde::<Vec<serde_json::Value>>().unwrap();
+                    for pyramid in pyramids {
+                        link.send_message(Msg::ExistingPyramid(
+                            pyramid.get("uuid").unwrap().as_str().unwrap().to_string(),
+                            pyramid,
+                        ));
+                    }
+                }
+                Err(e) => {
+                    web_sys::console::log_1(&format!("Error fetching: {:?}", e).into());
+                }
+            }
+        });
+
         Self {
             readers: HashMap::default(),
             files: Vec::default(),
@@ -242,6 +280,65 @@ impl Component for App {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
+            Msg::ExistingPyramid(pyramid_id, pyramid_json) => {
+                // This does three things. First, it fetches L0 image data first.
+                //
+                // Then, it sends Msg::Loaded (without POSTing) with the `original_filename` field
+                // from JSON as the file name and the `mime_type` field as the file_type, and of 
+                // ourse the data as the data.
+                //
+                // Finally, it sends Msg::Pyramid so that we cache the rest of the pyramid levels
+
+                // First, get L0 data.
+                let image_url = pyramid_json.get("image_urls").unwrap()[0]
+                    .as_str()
+                    .unwrap();
+                let request = Request::new_with_str(image_url).unwrap();
+                let link = ctx.link().clone();
+                let pyramid_id = pyramid_id.clone();
+                let file_name = pyramid_json.get("original_filename").unwrap().as_str().unwrap().to_string();
+                let file_name_moveable = file_name.clone();
+                let file_type = pyramid_json.get("mime_type").unwrap().as_str().unwrap().to_string();
+                let future = wasm_bindgen_futures::JsFuture::from(
+                    web_sys::window()
+                        .unwrap()
+                        .fetch_with_request(&request),
+                );
+                wasm_bindgen_futures::spawn_local(async move {
+                    match future.await {
+                        Ok(response) => {
+                            let response = response
+                                .dyn_into::<Response>()
+                                .expect("Failed to convert response");
+                            let ab_promise = response.array_buffer().unwrap();
+                            let ab = wasm_bindgen_futures::JsFuture::from(ab_promise)
+                                .await
+                                .unwrap();
+                            let data = js_sys::Uint8Array::new(&ab).to_vec();
+                            // Then, when we get the L0 data, send Msg::Loaded
+                            link.send_message(Msg::Loaded(
+                                file_name_moveable.to_string(),
+                                file_type.to_string(),
+                                data,
+                                false,
+                            ));
+                        }
+                        Err(e) => {
+                            web_sys::console::log_1(&format!("Error fetching: {:?}", e).into());
+                        }
+                    }
+                });
+                
+                // Finally, send Msg::Pyramid
+                let link = ctx.link().clone();
+                link.send_message(Msg::Pyramid(
+                    pyramid_id,
+                    file_name,
+                    pyramid_json.clone(),
+                ));
+
+                false
+            }
             Msg::Pyramid(pyramid_id, file_name, pyramid_json) => {
                 web_sys::console::log_2(
                     &"Received pyramid ID and JSON".into(),
@@ -326,65 +423,75 @@ impl Component for App {
                 pyramid_images[pyramid_level as usize] = Some(image);
                 true
             }
-            Msg::Loaded(file_name, file_type, data) => {
-                // analogous curl:
-                //      `curl --data-binary "@helldivers.jpg" -H "Content-Type: image/jpeg" -X POST http://localhost:3000/api/v1/pyramid`
-                let data_as_uint8array = Uint8Array::from(data.as_slice());
-                let data_as_jsvalue = JsValue::from(data_as_uint8array);
+            Msg::Loaded(file_name, file_type, data, do_post) => {
+                if do_post {
+                    // analogous curl:
+                    //      `curl --data-binary "@helldivers.jpg" -H "Content-Type: image/jpeg" -X POST http://localhost:3000/api/v1/pyramid`
+                    let data_as_uint8array = Uint8Array::from(data.as_slice());
+                    let data_as_jsvalue = JsValue::from(data_as_uint8array);
 
-                let request = Request::new_with_str_and_init(
-                    "http://localhost:8080/api/v1/pyramid",
-                    &web_sys::RequestInit::new()
-                        .method("POST")
-                        .body(Some(&data_as_jsvalue)),
-                )
-                .unwrap();
-                request
-                    .headers()
-                    .set("Content-Type", &file_type.clone())
+                    let request = Request::new_with_str_and_init(
+                        "http://localhost:8080/api/v1/pyramid",
+                        &web_sys::RequestInit::new()
+                            .method("POST")
+                            .body(Some(&data_as_jsvalue)),
+                    )
                     .unwrap();
-                let link = ctx.link().clone();
-                match web_sys::window() {
-                    Some(window) => {
-                        let fetch = window.fetch_with_request(&request);
-                        let future = wasm_bindgen_futures::JsFuture::from(fetch);
-                        let file_name_local = file_name.clone();
-                        wasm_bindgen_futures::spawn_local(async move {
-                            match future.await {
-                                Ok(response) => {
-                                    let response = response
-                                        .dyn_into::<Response>()
-                                        .expect("Failed to convert response");
-                                    let json_promise = response.json().unwrap();
-                                    let json = wasm_bindgen_futures::JsFuture::from(json_promise)
-                                        .await
-                                        .unwrap();
-                                    let pyramid_json =
-                                        json.into_serde::<serde_json::Value>().unwrap();
-                                    // get the "uuid" field from the JSON
-                                    let pyramid_id = pyramid_json
-                                        .get("uuid")
-                                        .unwrap()
-                                        .as_str()
-                                        .unwrap()
-                                        .to_string();
+                    request
+                        .headers()
+                        .append("Content-Type", &file_type.clone())
+                        .unwrap();
+                    request
+                        .headers()
+                        .append(
+                            "Content-Disposition",
+                            &format!("attachment; filename={}", file_name.clone()),
+                        )
+                        .unwrap();
 
-                                    link.send_message(Msg::Pyramid(
-                                        pyramid_id,
-                                        file_name_local,
-                                        pyramid_json,
-                                    ));
+                    let link = ctx.link().clone();
+                    match web_sys::window() {
+                        Some(window) => {
+                            let fetch = window.fetch_with_request(&request);
+                            let future = wasm_bindgen_futures::JsFuture::from(fetch);
+                            let file_name_local = file_name.clone();
+                            wasm_bindgen_futures::spawn_local(async move {
+                                match future.await {
+                                    Ok(response) => {
+                                        let response = response
+                                            .dyn_into::<Response>()
+                                            .expect("Failed to convert response");
+                                        let json_promise = response.json().unwrap();
+                                        let json = wasm_bindgen_futures::JsFuture::from(json_promise)
+                                            .await
+                                            .unwrap();
+                                        let pyramid_json =
+                                            json.into_serde::<serde_json::Value>().unwrap();
+                                        // get the "uuid" field from the JSON
+                                        let pyramid_id = pyramid_json
+                                            .get("uuid")
+                                            .unwrap()
+                                            .as_str()
+                                            .unwrap()
+                                            .to_string();
+
+                                        link.send_message(Msg::Pyramid(
+                                            pyramid_id,
+                                            file_name_local,
+                                            pyramid_json,
+                                        ));
+                                    }
+                                    Err(e) => {
+                                        web_sys::console::log_1(
+                                            &format!("Error fetching: {:?}", e).into(),
+                                        );
+                                    }
                                 }
-                                Err(e) => {
-                                    web_sys::console::log_1(
-                                        &format!("Error fetching: {:?}", e).into(),
-                                    );
-                                }
-                            }
-                        });
-                    }
-                    None => {
-                        web_sys::console::log_1(&"Failed to get window".into());
+                            });
+                        }
+                        None => {
+                            web_sys::console::log_1(&"Failed to get window".into());
+                        }
                     }
                 }
 
@@ -424,6 +531,7 @@ impl Component for App {
                                 file_name,
                                 file_type,
                                 res.expect("failed to read file"),
+                                true
                             ))
                         })
                     };
@@ -672,18 +780,14 @@ impl App {
         canvas_ctx.fill_rect(0.0, 0.0, 225.0, 60.0);
         canvas_ctx.set_fill_style(&"white".into());
         canvas_ctx.set_font("14px Courier New"); // Larger font size
-        match canvas_ctx.fill_text(
-            &format!("Level:          {}", level),
-            10.0,
-            15.0,
-        ) {
+        match canvas_ctx.fill_text(&format!("Level:          {}", level), 10.0, 15.0) {
             Ok(_) => {}
             Err(e) => {
                 web_sys::console::log_1(&format!("Error drawing text: {:?}", e).into());
             }
         }
         match canvas_ctx.fill_text(
-            &format!("Relative zoom:  {:.2}%", relative_zoom*100.0),
+            &format!("Relative zoom:  {:.2}%", relative_zoom * 100.0),
             10.0,
             30.0,
         ) {
@@ -693,7 +797,7 @@ impl App {
             }
         }
         match canvas_ctx.fill_text(
-            &format!("Effective zoom: {:.2}%", effective_zoom*100.0),
+            &format!("Effective zoom: {:.2}%", effective_zoom * 100.0),
             10.0,
             45.0,
         ) {
@@ -702,7 +806,6 @@ impl App {
                 web_sys::console::log_1(&format!("Error drawing text: {:?}", e).into());
             }
         }
-    
     }
 
     fn preview_file(&self, ctx: &Context<Self>, file: &FileDetails) -> Html {
