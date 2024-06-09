@@ -674,7 +674,7 @@ pub async fn get_image_from_collection(
     State(app_state): AppState,
     Path(name): Path<String>,
     request: Request,
-    collection_name: &str
+    collection_name: &str,
 ) -> Response {
     // If name has an extension, try to discern the desired format from it. But drop the extension
     // for the purpose of image lookup. We try to adhere to user request, but default to PNG if
@@ -862,7 +862,7 @@ pub async fn put_image_in_collection(
     State(app_state): AppState,
     Path(image_name): Path<String>,
     request: Request,
-    collection_name: &str
+    collection_name: &str,
 ) -> Response {
     let content_type_hdr = request.headers().get("Content-Type");
     if content_type_hdr.is_none() {
@@ -1035,7 +1035,11 @@ pub async fn put_image_in_collection(
     }
 }
 
-pub async fn delete_image_from_collection(State(app_state): AppState, Path(image_name): Path<String>, collection_name: &str) -> Response {
+pub async fn delete_image_from_collection(
+    State(app_state): AppState,
+    Path(image_name): Path<String>,
+    collection_name: &str,
+) -> Response {
     let app = &mut app_state.write().await;
     if app.db.is_none() {
         return (
@@ -1522,11 +1526,7 @@ pub async fn get_pyramids(State(app_state): AppState) -> Response {
         (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
     )
 )]
-pub async fn get_image(
-    state: AppState,
-    path: Path<String>,
-    request: Request,
-) -> Response {
+pub async fn get_image(state: AppState, path: Path<String>, request: Request) -> Response {
     get_image_from_collection(state, path, request, "images").await
 }
 
@@ -1544,11 +1544,7 @@ pub async fn get_image(
         (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
     )
 )]
-pub async fn put_image(
-    state: AppState,
-    path: Path<String>,
-    request: Request,
-) -> Response {
+pub async fn put_image(state: AppState, path: Path<String>, request: Request) -> Response {
     put_image_in_collection(state, path, request, "images").await
 }
 
@@ -1583,11 +1579,7 @@ pub async fn delete_image(state: AppState, path: Path<String>) -> Response {
         (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
     )
 )]
-pub async fn get_level(
-    state: AppState,
-    path: Path<String>,
-    request: Request,
-) -> Response {
+pub async fn get_level(state: AppState, path: Path<String>, request: Request) -> Response {
     get_image_from_collection(state, path, request, "levels").await
 }
 
@@ -1605,11 +1597,7 @@ pub async fn get_level(
         (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
     )
 )]
-pub async fn put_level(
-    state: AppState,
-    path: Path<String>,
-    request: Request,
-) -> Response {
+pub async fn put_level(state: AppState, path: Path<String>, request: Request) -> Response {
     put_image_in_collection(state, path, request, "levels").await
 }
 
@@ -1644,11 +1632,7 @@ pub async fn delete_level(state: AppState, path: Path<String>) -> Response {
         (status = StatusCode::NOT_FOUND, description = "No such image available", body = ()),
     )
 )]
-pub async fn get_tile(
-    state: AppState,
-    path: Path<String>,
-    request: Request,
-) -> Response {
+pub async fn get_tile(state: AppState, path: Path<String>, request: Request) -> Response {
     get_image_from_collection(state, path, request, "tiles").await
 }
 
@@ -1666,11 +1650,7 @@ pub async fn get_tile(
         (status = StatusCode::NOT_ACCEPTABLE, description = "Unsupported image format.", body = ()),
     )
 )]
-pub async fn put_tile(
-    state: AppState,
-    path: Path<String>,
-    request: Request,
-) -> Response {
+pub async fn put_tile(state: AppState, path: Path<String>, request: Request) -> Response {
     put_image_in_collection(state, path, request, "tiles").await
 }
 

@@ -203,7 +203,7 @@ pub enum Msg {
     ViewPan((f64, f64)),
     ViewPanState(bool),
     /// An existing pyramid was discovered on the server
-    /// 
+    ///
     /// pyramid_id, pyramid_json
     ExistingPyramid(String, serde_json::Value),
     /// A new pyramid has been created
@@ -235,14 +235,15 @@ impl Component for App {
     fn create(ctx: &Context<Self>) -> Self {
         let request = Request::new_with_str_and_init(
             "http://localhost:8080/api/v1/pyramids",
-            &web_sys::RequestInit::new()
-                .method("GET")
+            &web_sys::RequestInit::new().method("GET"),
         )
         .unwrap();
         // When we get a response to that request, we should send Msg::ExistingPyramid for each JSON
         // object in the response.
         let link = ctx.link().clone();
-        let future = wasm_bindgen_futures::JsFuture::from(web_sys::window().unwrap().fetch_with_request(&request));
+        let future = wasm_bindgen_futures::JsFuture::from(
+            web_sys::window().unwrap().fetch_with_request(&request),
+        );
         wasm_bindgen_futures::spawn_local(async move {
             match future.await {
                 Ok(response) => {
@@ -284,25 +285,31 @@ impl Component for App {
                 // This does three things. First, it fetches L0 image data first.
                 //
                 // Then, it sends Msg::Loaded (without POSTing) with the `original_filename` field
-                // from JSON as the file name and the `mime_type` field as the file_type, and of 
+                // from JSON as the file name and the `mime_type` field as the file_type, and of
                 // ourse the data as the data.
                 //
                 // Finally, it sends Msg::Pyramid so that we cache the rest of the pyramid levels
 
                 // First, get L0 data.
-                let image_url = pyramid_json.get("image_urls").unwrap()[0]
-                    .as_str()
-                    .unwrap();
+                let image_url = pyramid_json.get("image_urls").unwrap()[0].as_str().unwrap();
                 let request = Request::new_with_str(image_url).unwrap();
                 let link = ctx.link().clone();
                 let pyramid_id = pyramid_id.clone();
-                let file_name = pyramid_json.get("original_filename").unwrap().as_str().unwrap().to_string();
+                let file_name = pyramid_json
+                    .get("original_filename")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_string();
                 let file_name_moveable = file_name.clone();
-                let file_type = pyramid_json.get("mime_type").unwrap().as_str().unwrap().to_string();
+                let file_type = pyramid_json
+                    .get("mime_type")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_string();
                 let future = wasm_bindgen_futures::JsFuture::from(
-                    web_sys::window()
-                        .unwrap()
-                        .fetch_with_request(&request),
+                    web_sys::window().unwrap().fetch_with_request(&request),
                 );
                 wasm_bindgen_futures::spawn_local(async move {
                     match future.await {
@@ -328,14 +335,10 @@ impl Component for App {
                         }
                     }
                 });
-                
+
                 // Finally, send Msg::Pyramid
                 let link = ctx.link().clone();
-                link.send_message(Msg::Pyramid(
-                    pyramid_id,
-                    file_name,
-                    pyramid_json.clone(),
-                ));
+                link.send_message(Msg::Pyramid(pyramid_id, file_name, pyramid_json.clone()));
 
                 false
             }
@@ -462,9 +465,10 @@ impl Component for App {
                                             .dyn_into::<Response>()
                                             .expect("Failed to convert response");
                                         let json_promise = response.json().unwrap();
-                                        let json = wasm_bindgen_futures::JsFuture::from(json_promise)
-                                            .await
-                                            .unwrap();
+                                        let json =
+                                            wasm_bindgen_futures::JsFuture::from(json_promise)
+                                                .await
+                                                .unwrap();
                                         let pyramid_json =
                                             json.into_serde::<serde_json::Value>().unwrap();
                                         // get the "uuid" field from the JSON
@@ -531,7 +535,7 @@ impl Component for App {
                                 file_name,
                                 file_type,
                                 res.expect("failed to read file"),
-                                true
+                                true,
                             ))
                         })
                     };
@@ -635,7 +639,7 @@ impl Component for App {
                             })}
                         />
                     </div>
-                    
+
                     <div id="preview-area">
                         { for self.files.iter().map(
                             |file| self.preview_file(ctx, file)

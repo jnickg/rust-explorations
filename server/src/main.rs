@@ -140,14 +140,14 @@ async fn main() {
         .route(
             "/level/:name",
             get(api::get_level)
-            .put(api::put_level)
-            .delete(api::delete_level),
+                .put(api::put_level)
+                .delete(api::delete_level),
         )
         .route(
             "/tile/:name",
             get(api::get_tile)
-            .put(api::put_tile)
-            .delete(api::delete_tile),
+                .put(api::put_tile)
+                .delete(api::delete_tile),
         )
         .route(
             "/matrix/:name",
